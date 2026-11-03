@@ -29,7 +29,7 @@
     } catch (_) {}
     return fill({ habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {} });
   }
-  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (!Array.isArray(s.sports)) s.sports = []; if (!s.todos || typeof s.todos !== 'object') s.todos = {}; if (!Array.isArray(s.letters)) s.letters = []; if (s.demo === undefined) s.demo = true; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
+  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (!Array.isArray(s.sports)) s.sports = []; if (!s.todos || typeof s.todos !== 'object') s.todos = {}; if (!Array.isArray(s.letters)) s.letters = []; if (s.demo === undefined) s.demo = true; if (s.showSports === undefined) s.showSports = false; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
 
   // ---- photo + backup store (IndexedDB) ----
   const photos = {
@@ -668,6 +668,7 @@
     $('userBio').value = state.bio || '';
     $('userSports').value = (state.sports || []).join(', ');
     $('demoToggle').checked = state.demo !== false;
+    $('sportsToggle').checked = !!state.showSports;
     showSheet('menu');
   }
   function closeMenu() {
@@ -675,6 +676,7 @@
     state.bio = $('userBio').value.trim();
     state.sports = $('userSports').value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 12);
     state.demo = $('demoToggle').checked;
+    state.showSports = $('sportsToggle').checked;
     save(); hideSheets(); renderTop();
     if (screen === 'profile') renderProfile();
     if (screen === 'feed') renderFeed();
@@ -997,7 +999,7 @@
     $('profileBio').textContent = state.bio || '';
     $('cFollowers').textContent = followers().length;
     $('cFollowing').textContent = following().length;
-    const tags = (state.sports && state.sports.length) ? state.sports : state.habits.map((h) => h.name).filter(Boolean);
+    const tags = state.showSports ? ((state.sports && state.sports.length) ? state.sports : state.habits.map((h) => h.name).filter(Boolean)) : [];
     const shown = tags.slice(0, 5);
     $('sports').innerHTML = shown.map((t, i) => `<button class="sport-tag c${i % 5}" data-edit-sports>${esc(t)}</button>`).join('')
       + (tags.length > 5 ? `<button class="sport-tag more" data-edit-sports>+${tags.length - 5} more</button>` : '');
