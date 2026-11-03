@@ -1,4 +1,4 @@
-const CACHE = 'summit-v2';
+const CACHE = 'summit-v3';
 const SHELL = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon.svg', './icon-180.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
