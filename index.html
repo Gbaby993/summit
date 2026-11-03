@@ -48,8 +48,26 @@
     <div class="wordmark"><svg viewBox="0 0 512 512" aria-hidden="true"><path d="M96 352 L224 176 L288 264 L336 208 L416 352" fill="none" stroke="currentColor" stroke-width="30" stroke-linejoin="round" stroke-linecap="round"/><circle cx="224" cy="176" r="22" fill="#e39a3a"/></svg><span>Summit</span></div>
     <button class="icon-btn" id="feedNew" aria-label="New session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
   </header>
+  <div class="stories" id="stories" aria-label="Stories"></div>
   <div class="feed" id="feedList"></div>
 </main>
+
+<!-- Full-screen story viewer -->
+<div class="story-view" id="storyView" hidden>
+  <div class="sv-stage">
+    <div class="sv-bars" id="svBars"></div>
+    <div class="sv-head">
+      <span class="avatar" id="svAvatar">S</span>
+      <b id="svName">Summit</b>
+      <span id="svSub"></span>
+      <button class="sv-close" id="svClose" aria-label="Close">&times;</button>
+    </div>
+    <img id="svImg" alt="Story">
+    <button class="sv-tap left" id="svPrev" aria-label="Previous"></button>
+    <button class="sv-tap right" id="svNext" aria-label="Next"></button>
+    <div class="sv-foot"><button class="primary" id="svShare">Share to story</button></div>
+  </div>
+</div>
 
 <!-- ================= PROFILE ================= -->
 <main class="screen" id="screen-profile">
@@ -163,7 +181,7 @@
   </label>
   <label class="field">
     <span>Bio</span>
-    <input id="userBio" type="text" maxlength="80" autocomplete="off" placeholder="Here for a good time">
+    <input id="userBio" type="text" maxlength="80" autocomplete="off" placeholder="What's your thing? Run, lift, hoop…">
   </label>
   <p class="muted">Your log lives on this device only. Export now and then to keep a copy.</p>
   <div class="sheet-actions">

@@ -28,7 +28,26 @@
     } catch (_) {}
     return { name: '', bio: '', habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {}, posts: [] };
   }
-  function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+  // Two copies: localStorage (fast, synchronous) and IndexedDB (separate store).
+  // Code updates never touch either. If localStorage ever comes back empty, the IndexedDB copy restores it.
+  function save() {
+    const json = JSON.stringify(state);
+    localStorage.setItem(KEY, json);
+    photos.tx('meta', 'readwrite', (s) => s.put(json, 'state')).catch(() => {});
+  }
+  async function restoreIfEmpty() {
+    if (localStorage.getItem(KEY)) return;
+    try {
+      const json = await photos.tx('meta', 'readonly', (s) => s.get('state'));
+      if (!json) return;
+      const s = JSON.parse(json);
+      if (!s || !Array.isArray(s.habits)) return;
+      s.name ||= ''; s.bio ||= ''; s.posts ||= [];
+      state = s; localStorage.setItem(KEY, json);
+      render(); scrollToToday(false);
+    } catch (_) {}
+  }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   const habitById = (id) => state.habits.find((x) => x.id === id);
 
   const isDone = (hid, k) => !!(state.checks[k] && state.checks[k][hid]);
@@ -42,24 +61,28 @@
   const photos = {
     open() {
       return new Promise((res, rej) => {
-        const r = indexedDB.open('summit', 1);
-        r.onupgradeneeded = () => r.result.createObjectStore('photos');
+        const r = indexedDB.open('summit', 2);
+        r.onupgradeneeded = () => {
+          const d = r.result;
+          if (!d.objectStoreNames.contains('photos')) d.createObjectStore('photos');
+          if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta');
+        };
         r.onsuccess = () => res(r.result);
         r.onerror = () => rej(r.error);
       });
     },
-    async tx(mode, fn) {
+    async tx(store, mode, fn) {
       const d = await this.open();
       return new Promise((res, rej) => {
-        const t = d.transaction('photos', mode);
-        const req = fn(t.objectStore('photos'));
+        const t = d.transaction(store, mode);
+        const req = fn(t.objectStore(store));
         t.oncomplete = () => res(req && req.result);
         t.onerror = () => rej(t.error);
       });
     },
-    put(k, v) { return this.tx('readwrite', (s) => s.put(v, k)); },
-    get(k) { return this.tx('readonly', (s) => s.get(k)); },
-    del(k) { return this.tx('readwrite', (s) => s.delete(k)); },
+    put(k, v) { return this.tx('photos', 'readwrite', (s) => s.put(v, k)); },
+    get(k) { return this.tx('photos', 'readonly', (s) => s.get(k)); },
+    del(k) { return this.tx('photos', 'readwrite', (s) => s.delete(k)); },
   };
   const urlCache = new Map();
   async function photoUrl(id) {
@@ -497,7 +520,59 @@
     const d = Math.round(h / 24); if (d < 7) return `${d}d`;
     const dt = new Date(ts); return `${MONTHS_S[dt.getMonth()]} ${dt.getDate()}`;
   }
+  // ---- stories row ----
+  function renderStories() {
+    const initial = ((state.name || '').trim()[0] || 'S').toUpperCase();
+    let html = `<button class="story" data-story="new"><span class="ring plain"><span class="av">${initial}</span><i class="plus">+</i></span><span>Your story</span></button>`;
+    for (const h of state.habits) {
+      const s = currentStreak(h.id);
+      html += `<button class="story" data-story="${h.id}"><span class="ring${s ? '' : ' dim'}"><span class="av">${s}</span></span><span>${esc(h.name) || 'Untitled'}</span></button>`;
+    }
+    html += `<button class="story" data-story="all"><span class="ring"><span class="av" style="font-size:13px">${MONTHS_S[new Date().getMonth()].toUpperCase()}</span></span><span>Month</span></button>`;
+    $('stories').innerHTML = html;
+  }
+  $('stories').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-story]');
+    if (!b) return;
+    if (b.dataset.story === 'new') openPost(); else openStory(b.dataset.story);
+  });
+
+  // ---- full-screen story viewer ----
+  let svItems = [], svIndex = 0, svTimer = null;
+  function openStory(startId) {
+    svItems = [...state.habits.map((h) => h.id), 'all'];
+    svIndex = Math.max(0, svItems.indexOf(startId));
+    $('svAvatar').textContent = ((state.name || '').trim()[0] || 'S').toUpperCase();
+    $('svName').textContent = (state.name || '').trim() || 'Summit';
+    $('storyView').hidden = false;
+    showStoryItem();
+  }
+  function showStoryItem() {
+    clearTimeout(svTimer);
+    const id = svItems[svIndex];
+    shareTarget = id; shareStyle = 'card';
+    drawCard();
+    $('svImg').src = $('shareCanvas').toDataURL('image/png');
+    $('svSub').textContent = id === 'all' ? MONTHS[new Date().getMonth()] : (habitById(id) || {}).name || '';
+    $('svBars').innerHTML = svItems.map((_, i) => `<i class="${i < svIndex ? 'done' : i === svIndex ? 'live' : ''}"></i>`).join('');
+    svTimer = setTimeout(nextStory, 6000);
+  }
+  function nextStory() { if (svIndex < svItems.length - 1) { svIndex++; showStoryItem(); } else closeStory(); }
+  function prevStory() { if (svIndex > 0) svIndex--; showStoryItem(); }
+  function closeStory() { clearTimeout(svTimer); $('storyView').hidden = true; }
+  $('svNext').onclick = nextStory;
+  $('svPrev').onclick = prevStory;
+  $('svClose').onclick = closeStory;
+  $('svShare').onclick = () => { clearTimeout(svTimer); $('shareBtn').onclick(); };
+  document.addEventListener('keydown', (e) => {
+    if ($('storyView').hidden) return;
+    if (e.key === 'Escape') closeStory();
+    if (e.key === 'ArrowRight') nextStory();
+    if (e.key === 'ArrowLeft') prevStory();
+  });
+
   async function renderFeed() {
+    renderStories();
     const el = $('feedList');
     const name = (state.name || '').trim() || 'You';
     const initial = name[0].toUpperCase();
@@ -761,6 +836,7 @@
 
   render();
   scrollToToday(false);
+  restoreIfEmpty();
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
