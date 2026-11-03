@@ -493,10 +493,15 @@ body:not([data-screen="home"]) .checkin { display: none; }
 .hl .ring.hot { border-color: var(--amber); color: var(--amber-2); }
 .hl span { display: block; font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pgrid { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; border-top: 1px solid var(--line); padding-top: 2px; }
-.pgrid button { aspect-ratio: 1; background: #151515; overflow: hidden; position: relative; }
-.pgrid img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pgrid .tile-stat { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(180deg, #1a1a1a, #2a1708); font-weight: 800; font-size: 28px; }
-.pgrid .tile-stat small { display: block; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); text-align: center; font-weight: 700; }
+.tile { aspect-ratio: 3 / 4; background: #121212; overflow: hidden; position: relative; text-align: left; }
+.tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile .tile-bg { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(180deg, #161616 0%, #0f0f0f 100%); }
+.tile .tile-bg svg { width: 38%; height: 38%; color: rgba(255,255,255,0.22); }
+.tile::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.55) 100%); pointer-events: none; }
+.tile .tile-date { position: absolute; top: 8px; left: 9px; z-index: 1; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
+.tile .tile-foot { position: absolute; left: 9px; right: 6px; bottom: 8px; z-index: 1; display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
+.tile .tile-foot svg { width: 13px; height: 13px; flex: none; }
+.tile .tile-foot em { font-style: normal; color: var(--amber-2); }
 
 /* ===== New session sheet ===== */
 .photo-pick {

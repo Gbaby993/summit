@@ -738,6 +738,34 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  // ---- sport glyphs for tiles without a photo ----
+  const ICONS = {
+    run: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="15" cy="4" r="1.8"/><path d="M13 8l-4 3 2 3-4 6M13 8l3 3 3-1M13 8l-1 5 4 3v5"/></svg>',
+    lift: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4M6 8v8M18 8v8M21 10v4M6 12h12"/></svg>',
+    swim: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="7" r="1.8"/><path d="M4 12l4-5 4 3-2 3M3 18c2 0 2-1.5 4-1.5s2 1.5 4 1.5 2-1.5 4-1.5 2 1.5 4 1.5"/></svg>',
+    bike: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-7h5l3 7M10 9l3 7M14 5h3"/></svg>',
+    ball: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 2.5 3 13.5 0 16M12 4c-3 2.5-3 13.5 0 16"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>',
+  };
+  function sportIcon(name) {
+    const n = norm(name);
+    if (/run|jog|mile|sprint|track/.test(n)) return ICONS.run;
+    if (/lift|gym|strength|squat|bench|dead|push|pull/.test(n)) return ICONS.lift;
+    if (/swim|lap|pool/.test(n)) return ICONS.swim;
+    if (/bike|ride|cycl|spin/.test(n)) return ICONS.bike;
+    if (/hoop|ball|basket|soccer|tennis|golf/.test(n)) return ICONS.ball;
+    if (/sober|sleep|read|water|protein|fast|no |stretch|mobility|yoga|meditat/.test(n)) return ICONS.check;
+    return MARK;
+  }
+  function tileDate(day) {
+    const tk = todayKey();
+    if (day === tk) return 'Today';
+    if (day === shift(tk, -1)) return 'Yesterday';
+    const d = dateFromKey(day);
+    if (day > shift(tk, -7)) return WD_L[d.getDay()].slice(0, 3);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
   // ---- profile ----
   function renderProfile() {
     const name = (state.name || '').trim();
@@ -752,10 +780,19 @@
       return `<button class="hl" data-hl="${h.id}"><span class="ring${s >= 3 ? ' hot' : ''}">${s}</span><span>${esc(h.name) || 'Untitled'}</span></button>`;
     }).join('');
     const g = $('pgrid');
-    if (!state.posts.length) { g.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Your sessions will show up here.</div>'; return; }
+    if (!state.posts.length) {
+      g.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No posts yet.<br><button class="primary" id="profileNew">Post a session</button></div>';
+      $('profileNew').onclick = openPost;
+      return;
+    }
     g.innerHTML = state.posts.map((p) => {
-      const top = Math.max(0, ...Object.values(p.streaks || {}));
-      return `<button data-open="${p.id}">${p.photo ? `<img data-photo="${p.photo}" alt="">` : `<div class="tile-stat">${top}<small>streak</small></div>`}</button>`;
+      const lines = p.habits.map((id) => habitById(id)).filter(Boolean);
+      const first = lines[0];
+      const icon = sportIcon(first ? first.name : '');
+      const foot = first
+        ? `${icon}<span>${esc(first.name)}${lines.length > 1 ? ` +${lines.length - 1}` : ''}</span><em>&#9650; ${p.streaks[first.id] || 0}</em>`
+        : `${MARK}<span>Session</span>`;
+      return `<button class="tile" data-open="${p.id}">${p.photo ? `<img data-photo="${p.photo}" alt="">` : `<div class="tile-bg">${icon}</div>`}<span class="tile-date">${tileDate(p.day)}</span><span class="tile-foot">${foot}</span></button>`;
     }).join('');
     for (const img of g.querySelectorAll('img[data-photo]')) photoUrl(img.dataset.photo).then((u) => { if (u) img.src = u; });
   }
