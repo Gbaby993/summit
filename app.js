@@ -29,7 +29,7 @@
     } catch (_) {}
     return fill({ habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {} });
   }
-  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (!Array.isArray(s.sports)) s.sports = []; if (!s.todos || typeof s.todos !== 'object') s.todos = {}; if (s.demo === undefined) s.demo = true; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
+  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (!Array.isArray(s.sports)) s.sports = []; if (!s.todos || typeof s.todos !== 'object') s.todos = {}; if (!Array.isArray(s.letters)) s.letters = []; if (s.demo === undefined) s.demo = true; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
 
   // ---- photo + backup store (IndexedDB) ----
   const photos = {
@@ -204,6 +204,8 @@
     for (const b of document.querySelectorAll('.tabbar [data-tab]')) b.classList.toggle('on', b.dataset.tab === name);
     if (name === 'feed') renderFeed();
     if (name === 'profile') renderProfile();
+    if (name === 'letter') renderLetter();
+    if (name === 'daily') renderDaily();
     window.scrollTo({ top: 0 });
   }
   document.querySelector('.tabbar').addEventListener('click', (e) => {
@@ -399,6 +401,96 @@
     renderTop(); renderCards(); renderGrid(); renderTop3();
     if (screen === 'feed') renderFeed();
     if (screen === 'profile') renderProfile();
+    if (screen === 'letter') renderLetter();
+    if (screen === 'daily') renderDaily();
+  }
+
+  // ---- letter to yourself: sealed for one year ----
+  const LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  const OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>';
+  const longDate = (ts) => { const d = new Date(ts); return `${MONTHS_S[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`; };
+  function oneYearFrom(ts) { const d = new Date(ts); d.setFullYear(d.getFullYear() + 1); return d.getTime(); }
+  let letterOpen = null; // id of the unlocked letter being read
+  function renderLetter() {
+    const wrap = $('letterWrap');
+    const now = Date.now();
+    const letters = state.letters.slice().sort((a, b) => b.ts - a.ts);
+    let html = '';
+    if (letterOpen) {
+      const l = letters.find((x) => x.id === letterOpen);
+      if (l && now >= l.unlockTs) {
+        html += `<div class="letter-read">${esc(l.text)}<span class="from">Written ${longDate(l.ts)}. Opened ${longDate(now)}.</span></div>
+          <div class="sheet-actions"><button class="ghost" id="letterBack">Back</button></div>`;
+        wrap.innerHTML = html;
+        $('letterBack').onclick = () => { letterOpen = null; renderLetter(); };
+        return;
+      }
+      letterOpen = null;
+    }
+    for (const l of letters) {
+      const unlocked = now >= l.unlockTs;
+      const daysLeft = Math.max(0, Math.ceil((l.unlockTs - now) / 864e5));
+      const pct = Math.min(100, Math.round(((now - l.ts) / (l.unlockTs - l.ts)) * 100));
+      html += unlocked
+        ? `<button class="seal open" data-open-letter="${l.id}"><div class="lock">${OPEN}</div><h3>Ready to open</h3><p>Written ${longDate(l.ts)}. Tap to read it.</p></button>`
+        : `<div class="seal"><div class="lock">${LOCK}</div><h3>Sealed</h3><p>Written ${longDate(l.ts)}. Opens ${longDate(l.unlockTs)}.</p><div class="days"><b>${daysLeft}</b><span>days left</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+    }
+    html += `<p class="letter-intro">${letters.length ? 'Write another.' : 'Write to the you one year from now.'} Once you seal it, it locks until the same date next year. No peeking, no edits.</p>
+      <textarea class="letter-paper" id="letterText" maxlength="4000" placeholder="Dear me, a year from now…"></textarea>
+      <div class="letter-foot"><small id="letterOpens">Opens ${longDate(oneYearFrom(now))}</small><button class="primary" id="sealBtn">Seal for one year</button></div>`;
+    wrap.innerHTML = html;
+    $('sealBtn').onclick = () => {
+      const text = $('letterText').value.trim();
+      if (!text) { $('letterText').focus(); return; }
+      if (!confirm(`Seal this letter until ${longDate(oneYearFrom(Date.now()))}? You won't be able to read or change it before then.`)) return;
+      const ts = Date.now();
+      state.letters.push({ id: uid(), ts, unlockTs: oneYearFrom(ts), text });
+      save();
+      renderLetter();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+  }
+  $('letterWrap').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-open-letter]');
+    if (b) { letterOpen = b.dataset.openLetter; renderLetter(); }
+  });
+
+  // ---- daily page: the ideas of Atomic Habits, in our own words ----
+  const PAGES = [
+    { t: 'One percent', lead: 'Getting one percent better today feels like nothing. That is the point.', body: ['Tiny gains compound. A habit you keep for a year does not add up, it multiplies, and the first months look flat because the curve has not bent yet.', 'The mistake is judging a habit by what it does today. Judge it by where it points.'], try: 'Pick one line on your grid and make today\'s version of it slightly harder, or slightly longer, than yesterday\'s.' },
+    { t: 'Votes', lead: 'Every rep is a vote for the kind of person you are becoming.', body: ['You do not need a unanimous result. You need a majority. One check on the grid is a vote for "I am someone who trains." Missing one is a vote the other way.', 'Stop asking what you want to achieve. Ask who you want to be, then act like that person would today.'], try: 'Finish this sentence before you train: "I am the kind of person who ___." Then cast the vote.' },
+    { t: 'Systems', lead: 'Goals set the direction. Systems make the progress.', body: ['Everyone who wins and everyone who loses had the same goal. The goal did not separate them. The daily system did.', 'A goal is a one-time event. A system is what you do on a Tuesday when nobody is looking.'], try: 'Write down the system behind one of your lines: when, where, and what the minimum version looks like.' },
+    { t: 'The plateau', lead: 'Habits feel useless right up until they do not.', body: ['An ice cube sitting at 25 degrees does nothing as the room warms to 26, 27, 31. Then at 32 it melts. All the earlier degrees mattered. They just had no visible result.', 'If your streak feels pointless, you are probably in the warming phase.'], try: 'Look at your longest streak on the grid. Keep it one more day without asking what it is doing for you.' },
+    { t: 'Make it obvious', lead: 'You do not decide to do most of what you do. You respond to cues.', body: ['The gym bag by the door is a cue. The running shoes under the desk are a cue. The phone on the pillow is a cue too.', 'Design the cues and the decision is already made.'], try: 'Tonight, put the first thing you need for tomorrow\'s session where you cannot miss it.' },
+    { t: 'Stacking', lead: 'Attach the new habit to one you already never miss.', body: ['"After I pour my coffee, I will stretch for two minutes." The old habit becomes the cue for the new one, so you borrow its reliability.', 'The formula is simple: after I [current habit], I will [new habit].'], try: 'Pick your weakest line and stack it on top of something you do every single day without thinking.' },
+    { t: 'Environment', lead: 'Willpower is a bad long-term plan. Rooms are better.', body: ['The people who look disciplined mostly just avoid tempting situations. They shaped the space so the good option is the easy one.', 'Change what you see first when you walk in, and you change what you do.'], try: 'Move one thing in your space so the habit you want is one step closer and the one you don\'t is one step farther.' },
+    { t: 'Make it attractive', lead: 'Pair the thing you need to do with the thing you want to do.', body: ['Only watch the show on the bike. Only listen to that podcast on the run. The want pulls the need along with it.', 'Habits stick when they feel like a reward, not a tax.'], try: 'Choose one indulgence and make it available only during one of your lines.' },
+    { t: 'The tribe', lead: 'You become the average of the rooms you stand in.', body: ['Join a group where your desired behavior is the normal behavior. When everyone around you trains, training stops being a decision.', 'Belonging is a stronger motive than discipline.'], try: 'Message one person who does what you are trying to do and set a time to do it together.' },
+    { t: 'Make it easy', lead: 'Reduce the friction between you and the habit to almost nothing.', body: ['Every extra step is a place to quit. Lay out the clothes. Fill the bottle. Pick the route in advance.', 'The habit you can start in thirty seconds is the habit you keep.'], try: 'List the steps between "I should" and "I started" for one line. Remove one of them tonight.' },
+    { t: 'Two minutes', lead: 'Scale the habit down until it is impossible to say no.', body: ['"Run three miles" becomes "put on running shoes." "Read a chapter" becomes "open the book." Master showing up first; the rest follows.', 'A habit must be established before it can be improved.'], try: 'Today, let one of your lines count if you do the first two minutes of it.' },
+    { t: 'Make it satisfying', lead: 'What gets rewarded gets repeated. What gets punished gets avoided.', body: ['The problem with good habits is the reward comes later. The problem with bad ones is it comes now. Fix the timing: give yourself something immediately after the rep.', 'The check mark on the grid is a reward. Feel it.'], try: 'After you finish a line today, do one small thing you enjoy within five minutes. Make the link.' },
+    { t: 'Never miss twice', lead: 'Missing once is an accident. Missing twice is the start of a new habit.', body: ['Nobody is perfect. The streak will break. What matters is the next day, when the easiest thing in the world is to miss again.', 'Breaking the chain is not the failure. Not picking it back up is.'], try: 'If any line has an empty square yesterday, fill today\'s. That is the whole assignment.' },
+    { t: 'The chain', lead: 'The grid is not a record of what you did. It is the reason you do it.', body: ['Tracking makes the habit obvious, attractive and satisfying all at once. You see the chain. You do not want to break the chain.', 'Do not track everything. Track the one or two things that define the person you are becoming.'], try: 'Share your month card today. Making the chain visible to someone else makes it harder to break.' },
+    { t: 'Reps over perfect', lead: 'Motion feels like progress. Action is progress.', body: ['Planning the perfect program is motion. Doing an imperfect workout is action. One group of students was graded on the number of photos they took, another on the single best photo. The quantity group took the better pictures.', 'Get the reps in. Quality comes from volume, not from waiting.'], try: 'Skip the planning today. Do the sloppy version of the thing and mark it done.' },
+    { t: 'Inversion', lead: 'Everything that builds a good habit, flipped, breaks a bad one.', body: ['Make it invisible: hide the cue. Make it unattractive: name what it actually costs you. Make it hard: add steps. Make it unsatisfying: tell someone who will notice.', 'You do not fight a bad habit with willpower. You starve it of cues.'], try: 'Pick one habit you want gone and make its first step harder tonight. Log out. Move it. Delete it.' },
+    { t: 'Goldilocks', lead: 'Stay at the edge of your ability. Not too easy, not too hard.', body: ['Boredom kills more habits than failure does. If the work is far below your level, you drift. If it is far above, you quit. Right at the edge is where you stay interested.', 'Aim for sessions that are about four percent beyond what you can comfortably do.'], try: 'Make one line a little harder today, just enough that you have to pay attention.' },
+    { t: 'Boredom', lead: 'The difference is not who wants it more. It is who keeps going when it is boring.', body: ['Anyone can train when it is new and exciting. The pros do the same session on the day it feels pointless, and that is most days.', 'Fall in love with boredom. It is the texture of mastery.'], try: 'Do today\'s session with no music, no feed, no novelty. Just the work. Notice you can.' },
+    { t: 'Review', lead: 'Habits are the solution to one problem and the cause of the next.', body: ['Once something is automatic you stop noticing it, and you stop improving it. Build a short review into the week: what worked, what did not, what to adjust.', 'The grid tells you what happened. You still have to read it.'], try: 'Scroll back through this month\'s grid. Name one pattern you had not noticed, and one change for next week.' },
+    { t: 'Accountability', lead: 'Make the cost of skipping public and immediate.', body: ['A habit contract is simple: this is what I will do, this is who will know if I don\'t, this is what it costs me. Others seeing you is a powerful reason to show up.', 'We care about what the people around us think. Use it.'], try: 'Tell one person exactly what you are doing tomorrow and when. Ask them to check.' },
+    { t: 'Time and place', lead: 'Vague intentions fail. Specific ones get done.', body: ['"I will train more" is a wish. "I will lift at 6:30 at the gym on 5th" is a plan. People who state when and where are far more likely to follow through.', 'The formula: I will [behavior] at [time] in [location].'], try: 'For each line on your grid, write the time and place for tomorrow. Put it in the Top 3.' },
+    { t: 'The loop', lead: 'Every habit runs the same loop: cue, craving, response, reward.', body: ['Something prompts you. You want the change it promises. You act. You get something from it. Break any link and the habit stalls; strengthen all four and it locks in.', 'When a habit will not stick, find which link is weak.'], try: 'Take your weakest line and name its cue, its craving, its response and its reward. Fix the one that is missing.' },
+  ];
+  function renderDaily() {
+    const dayNum = Math.round(dateFromKey(todayKey()).getTime() / 864e5);
+    const i = dayNum % PAGES.length;
+    const p = PAGES[i];
+    const t = new Date();
+    $('dailyEyebrow').textContent = `${WD_L[t.getDay()]}, ${MONTHS_S[t.getMonth()]} ${t.getDate()}`;
+    $('dailyTitle').textContent = p.t;
+    $('dailyBody').innerHTML = `<div class="page-no">Page ${i + 1} of ${PAGES.length}</div>
+      <p class="lead">${esc(p.lead)}</p>${p.body.map((b) => `<p>${esc(b)}</p>`).join('')}
+      <div class="try"><span>Try today</span><p>${esc(p.try)}</p></div>
+      <p class="credit">Written in our own words around the ideas in <i>Atomic Habits</i> by James Clear. A new page every day. Read the book for the real thing.</p>`;
   }
 
   function refreshRow(hid) {

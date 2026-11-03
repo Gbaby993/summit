@@ -101,11 +101,22 @@
   Check in
 </button>
 
+<!-- ================= LETTER TO YOURSELF ================= -->
+<main class="screen" id="screen-letter">
+  <header class="screen-head"><div><span class="eyebrow">A message to yourself</span><h2>Dear future me</h2></div></header>
+  <div class="letter-wrap" id="letterWrap"></div>
+</main>
+
+<!-- ================= DAILY PAGE ================= -->
+<main class="screen" id="screen-daily">
+  <header class="screen-head"><div><span class="eyebrow" id="dailyEyebrow">Today's page</span><h2 id="dailyTitle">Daily page</h2></div></header>
+  <article class="daily" id="dailyBody"></article>
+</main>
+
 <nav class="tabbar" aria-label="Screens">
   <button data-tab="home" class="on" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg></button>
-  <button data-tab="feed" aria-label="Feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="16" cy="8" r="1.5"/></svg></button>
-  <button data-tab="new" aria-label="New session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg></button>
-  <button data-tab="profile" aria-label="Profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></button>
+  <button data-tab="letter" aria-label="Message to yourself"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 8l9 6 9-6"/></svg></button>
+  <button data-tab="daily" aria-label="Daily page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 1-2-2z"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg></button>
 </nav>
 
 <div class="scrim" id="scrim" hidden></div>
