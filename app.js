@@ -18,46 +18,20 @@
   const shift = (k, days) => { const d = dateFromKey(k); d.setDate(d.getDate() + days); return keyOf(d); };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const norm = (s) => String(s || '').trim().toLowerCase();
+  const initialOf = (name) => ((name || '').trim()[0] || 'S').toUpperCase();
 
-  // ---- state ----
+  // ---- state (your profile) ----
   let state = load();
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
-      if (s && Array.isArray(s.habits) && s.checks) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; return s; }
+      if (s && Array.isArray(s.habits) && s.checks) return fill(s);
     } catch (_) {}
-    return { name: '', bio: '', habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {}, posts: [] };
+    return fill({ habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {} });
   }
-  // Two copies: localStorage (fast, synchronous) and IndexedDB (separate store).
-  // Code updates never touch either. If localStorage ever comes back empty, the IndexedDB copy restores it.
-  function save() {
-    const json = JSON.stringify(state);
-    localStorage.setItem(KEY, json);
-    photos.tx('meta', 'readwrite', (s) => s.put(json, 'state')).catch(() => {});
-  }
-  async function restoreIfEmpty() {
-    if (localStorage.getItem(KEY)) return;
-    try {
-      const json = await photos.tx('meta', 'readonly', (s) => s.get('state'));
-      if (!json) return;
-      const s = JSON.parse(json);
-      if (!s || !Array.isArray(s.habits)) return;
-      s.name ||= ''; s.bio ||= ''; s.posts ||= [];
-      state = s; localStorage.setItem(KEY, json);
-      render(); scrollToToday(false);
-    } catch (_) {}
-  }
-  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-  const habitById = (id) => state.habits.find((x) => x.id === id);
+  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (s.demo === undefined) s.demo = true; s.id = 'me'; return s; }
 
-  const isDone = (hid, k) => !!(state.checks[k] && state.checks[k][hid]);
-  function setDone(hid, k, on) {
-    if (on) { (state.checks[k] ||= {})[hid] = true; }
-    else if (state.checks[k]) { delete state.checks[k][hid]; if (!Object.keys(state.checks[k]).length) delete state.checks[k]; }
-    save();
-  }
-
-  // ---- photo store (IndexedDB; localStorage is too small for images) ----
+  // ---- photo + backup store (IndexedDB) ----
   const photos = {
     open() {
       return new Promise((res, rej) => {
@@ -84,6 +58,27 @@
     get(k) { return this.tx('photos', 'readonly', (s) => s.get(k)); },
     del(k) { return this.tx('photos', 'readwrite', (s) => s.delete(k)); },
   };
+
+  // Two copies: localStorage (fast, synchronous) and IndexedDB (separate store).
+  // Code updates never touch either. If localStorage ever comes back empty, the IndexedDB copy restores it.
+  function save() {
+    const json = JSON.stringify(state);
+    localStorage.setItem(KEY, json);
+    photos.tx('meta', 'readwrite', (s) => s.put(json, 'state')).catch(() => {});
+  }
+  async function restoreIfEmpty() {
+    if (localStorage.getItem(KEY)) return;
+    try {
+      const json = await photos.tx('meta', 'readonly', (s) => s.get('state'));
+      if (!json) return;
+      const s = JSON.parse(json);
+      if (!s || !Array.isArray(s.habits)) return;
+      state = fill(s); localStorage.setItem(KEY, json);
+      render(); scrollToToday(false);
+    } catch (_) {}
+  }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
   const urlCache = new Map();
   async function photoUrl(id) {
     if (urlCache.has(id)) return urlCache.get(id);
@@ -107,17 +102,25 @@
     } finally { URL.revokeObjectURL(src); }
   }
 
-  // ---- stats ----
-  function streakAt(hid, endKey) {
+  // ---- stats (profile-aware) ----
+  const isDoneIn = (checks, hid, k) => !!(checks[k] && checks[k][hid]);
+  const isDone = (hid, k) => isDoneIn(state.checks, hid, k);
+  function setDone(hid, k, on) {
+    if (on) { (state.checks[k] ||= {})[hid] = true; }
+    else if (state.checks[k]) { delete state.checks[k][hid]; if (!Object.keys(state.checks[k]).length) delete state.checks[k]; }
+    save();
+  }
+  function streakAtIn(checks, hid, endKey) {
     let k = endKey;
-    if (!isDone(hid, k)) k = shift(k, -1);
+    if (!isDoneIn(checks, hid, k)) k = shift(k, -1);   // today still open; count from yesterday
     let n = 0;
-    while (isDone(hid, k)) { n++; k = shift(k, -1); }
+    while (isDoneIn(checks, hid, k)) { n++; k = shift(k, -1); }
     return n;
   }
+  const streakAt = (hid, endKey) => streakAtIn(state.checks, hid, endKey);
   const currentStreak = (hid) => streakAt(hid, todayKey());
-  function bestStreak(hid) {
-    const days = Object.keys(state.checks).filter((k) => state.checks[k][hid]).sort();
+  function bestStreak(hid, checks = state.checks) {
+    const days = Object.keys(checks).filter((k) => checks[k][hid]).sort();
     let best = 0, run = 0, prev = null;
     for (const k of days) {
       run = prev && shift(prev, 1) === k ? run + 1 : 1;
@@ -126,17 +129,17 @@
     }
     return best;
   }
-  function monthCount(hid, y, m) {
+  function monthCount(hid, y, m, checks = state.checks) {
     let n = 0;
     const days = new Date(y, m + 1, 0).getDate();
-    for (let d = 1; d <= days; d++) if (isDone(hid, key(y, m, d))) n++;
+    for (let d = 1; d <= days; d++) if (isDoneIn(checks, hid, key(y, m, d))) n++;
     return n;
   }
   const totalCount = (hid) => Object.keys(state.checks).filter((k) => state.checks[k][hid]).length;
   const activeDays = () => Object.keys(state.checks).filter((k) => Object.keys(state.checks[k]).length).length;
-  function activeDaysSince(days) {
+  function activeDaysSinceIn(checks, days) {
     const from = shift(todayKey(), -days);
-    return Object.keys(state.checks).filter((k) => k >= from && Object.keys(state.checks[k]).length).length;
+    return Object.keys(checks).filter((k) => k >= from && Object.keys(checks[k]).length).length;
   }
   function weekKeys() {
     const t = new Date();
@@ -144,6 +147,43 @@
     const mon = new Date(t); mon.setDate(t.getDate() - dow);
     return Array.from({ length: 7 }, (_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); return keyOf(d); });
   }
+
+  // ---- other people ----
+  // Until there are accounts, a few demo athletes with generated logs. They go through the
+  // same profile shape { id, name, habits, checks, posts } that real followed users will.
+  function seeded(seed) { let x = seed >>> 0; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; }
+  function makeDemo(id, name, bio, lines, probs, captions, seed) {
+    const rnd = seeded(seed);
+    const habits = lines.map((n, i) => ({ id: `${id}-${i}`, name: n }));
+    const checks = {};
+    const tk = todayKey();
+    for (let i = 1; i <= 45; i++) {
+      const k = shift(tk, -i);
+      habits.forEach((h, j) => { if (rnd() < probs[j]) (checks[k] ||= {})[h.id] = true; });
+    }
+    habits.forEach((h, j) => { if (rnd() < probs[j] * 0.6) (checks[tk] ||= {})[h.id] = true; });
+    const posts = [];
+    for (let i = 0; i < 12 && posts.length < 3; i++) {
+      const k = shift(tk, -i);
+      const done = habits.filter((h) => isDoneIn(checks, h.id, k));
+      if (!done.length || rnd() > 0.55) continue;
+      posts.push({ id: `${id}-p${i}`, author: id, ts: Date.now() - i * 864e5 - Math.floor(rnd() * 8 * 36e5), day: k,
+        caption: captions[posts.length % captions.length], habits: done.map((h) => h.id), photo: null,
+        streaks: Object.fromEntries(done.map((h) => [h.id, streakAtIn(checks, h.id, k)])) });
+    }
+    return { id, name, bio, demo: true, habits, checks, posts };
+  }
+  const DEMO = [
+    makeDemo('maya', 'Maya', 'Marathon block. Miles before coffee.', ['Run', 'Mobility'], [0.8, 0.5], ['Easy miles, legs felt fresh.', 'Tempo day. Humid.', 'Long run done.'], 11),
+    makeDemo('dre', 'Dre', 'Lift heavy, eat clean.', ['Lift', 'Protein'], [0.75, 0.65], ['Pull day. Grip gave out first.', 'PR on squat.', 'Deload, still showed up.'], 23),
+    makeDemo('jules', 'Jules', 'Open water season.', ['Swim', 'Sober'], [0.6, 0.92], ['Early laps.', '2k in the lake.', 'Drills only.'], 37),
+    makeDemo('kofi', 'Kofi', 'Hoops and sleep.', ['Hoop', 'Sleep by 11'], [0.7, 0.5], ['Pickup run, lost twice.', 'Shooting drills.', 'Full court, finally.'], 41),
+  ];
+  const people = () => (state.demo === false ? [] : DEMO);
+  const profileOf = (id) => (!id || id === 'me' ? state : people().find((p) => p.id === id) || null);
+  const habitIn = (profile, id) => profile && profile.habits.find((x) => x.id === id);
+  const habitById = (id) => habitIn(state, id);
+  const displayName = (p) => (p.id === 'me' ? (state.name || '').trim() || 'You' : p.name);
 
   // ---- navigation ----
   let screen = 'home';
@@ -168,7 +208,7 @@
 
   function renderTop() {
     const n = (state.name || '').trim();
-    const initial = n ? n[0].toUpperCase() : 'S';
+    const initial = initialOf(n);
     $('avatarBtn').textContent = initial;
     $('profileAvatar').textContent = initial;
     const streaks = state.habits.map((h) => currentStreak(h.id));
@@ -392,12 +432,19 @@
   $('closeCheckin').onclick = () => { hideSheets(); render(); scrollToToday(false); };
 
   // ---- profile edit / settings ----
-  function openMenu() { $('userName').value = state.name || ''; $('userBio').value = state.bio || ''; showSheet('menu'); }
+  function openMenu() {
+    $('userName').value = state.name || '';
+    $('userBio').value = state.bio || '';
+    $('demoToggle').checked = state.demo !== false;
+    showSheet('menu');
+  }
   function closeMenu() {
     state.name = $('userName').value.trim();
     state.bio = $('userBio').value.trim();
+    state.demo = $('demoToggle').checked;
     save(); hideSheets(); renderTop();
     if (screen === 'profile') renderProfile();
+    if (screen === 'feed') renderFeed();
   }
   $('avatarBtn').onclick = () => go('profile');
   $('editProfile').onclick = openMenu;
@@ -427,8 +474,7 @@
       const s = JSON.parse(await f.text());
       if (!Array.isArray(s.habits) || typeof s.checks !== 'object') throw new Error('bad');
       if (!confirm('Replace everything on this device with the imported log?')) return;
-      s.name ||= ''; s.bio ||= ''; s.posts ||= [];
-      state = s; save(); hideSheets(); render(); scrollToToday(false);
+      state = fill(s); save(); hideSheets(); render(); scrollToToday(false);
     } catch (_) { alert('That file is not a Summit export.'); }
     e.target.value = '';
   };
@@ -480,7 +526,7 @@
     const tk = todayKey();
     const habits = [...draft.habits];
     for (const hid of habits) setDone(hid, tk, true);     // posting a session marks the day
-    const post = { id, ts: Date.now(), day: tk, caption: $('postCaption').value.trim(), habits, photo: null,
+    const post = { id, author: 'me', ts: Date.now(), day: tk, caption: $('postCaption').value.trim(), habits, photo: null,
       streaks: Object.fromEntries(habits.map((hid) => [hid, streakAt(hid, tk)])) };
     if (draft.blob) { try { await photos.put(id, draft.blob); post.photo = id; } catch (_) {} }
     state.posts.unshift(post);
@@ -493,24 +539,26 @@
   // ---- feed ranking ----
   // Scores a session for a viewer the way an athlete-first feed should: what you train,
   // how hard the streak was, how consistent the author is, and how fresh it is.
-  // No likes, no follower counts. Works on your own sessions now and on everyone's later.
+  // No likes, no follower counts. Same scorer for your sessions and everyone else's.
   function rankScore(post, viewer) {
+    const author = profileOf(post.author) || state;
     const hours = (Date.now() - post.ts) / 36e5;
     const recency = Math.pow(0.5, hours / 36);                       // half-life 36h
     const viewerSports = new Set(viewer.habits.map((h) => norm(h.name)));
-    const postSports = post.habits.map((id) => norm((habitById(id) || {}).name));
+    const postSports = post.habits.map((id) => norm((habitIn(author, id) || {}).name));
     const affinity = postSports.length ? postSports.filter((s) => viewerSports.has(s)).length / postSports.length : 0;
     const topStreak = Math.max(0, ...Object.values(post.streaks || {}));
     const effort = Math.log1p(topStreak) / Math.log1p(30);          // 30-day streak ≈ 1.0
-    const consistency = Math.min(1, activeDaysSince(30) / 20);       // author: 20 of last 30 days ≈ 1.0
+    const consistency = Math.min(1, activeDaysSinceIn(author.checks, 30) / 20); // 20 of last 30 days ≈ 1.0
     const media = post.photo ? 0.15 : 0;
     const score = recency * (1 + 0.6 * affinity + 0.5 * effort + 0.3 * consistency + media);
-    const why = topStreak >= 7 ? `${topStreak}-day streak` : affinity ? 'What you train' : consistency >= 0.75 ? 'Consistent' : 'New';
+    const why = affinity ? 'What you train' : topStreak >= 7 ? `${topStreak}-day streak` : consistency >= 0.75 ? 'Consistent' : 'New';
     return { score, why };
   }
   function rankFeed(posts, viewer) {
     return posts.map((p) => ({ p, ...rankScore(p, viewer) })).sort((a, b) => b.score - a.score);
   }
+  const allPosts = () => [...state.posts.map((p) => ({ ...p, author: 'me' })), ...people().flatMap((p) => p.posts)];
 
   let feedMode = 'foryou';
   function timeAgo(ts) {
@@ -520,30 +568,34 @@
     const d = Math.round(h / 24); if (d < 7) return `${d}d`;
     const dt = new Date(ts); return `${MONTHS_S[dt.getMonth()]} ${dt.getDate()}`;
   }
-  // ---- stories row ----
+
+  // ---- stories row: you first, then people ----
   function renderStories() {
-    const initial = ((state.name || '').trim()[0] || 'S').toUpperCase();
-    let html = `<button class="story" data-story="new"><span class="ring plain"><span class="av">${initial}</span><i class="plus">+</i></span><span>Your story</span></button>`;
-    for (const h of state.habits) {
-      const s = currentStreak(h.id);
-      html += `<button class="story" data-story="${h.id}"><span class="ring${s ? '' : ' dim'}"><span class="av">${s}</span></span><span>${esc(h.name) || 'Untitled'}</span></button>`;
+    const mine = state.habits.some((h) => currentStreak(h.id) > 0);
+    let html = `<button class="story" data-story="me"><span class="ring${mine ? '' : ' dim'}"><span class="av">${initialOf(state.name)}</span><i class="plus" data-story="new">+</i></span><span>Your story</span></button>`;
+    for (const p of people()) {
+      html += `<button class="story" data-story="${p.id}"><span class="ring${p.demo ? ' demo' : ''}"><span class="av">${initialOf(p.name)}</span></span><span>${esc(p.name)}${p.demo ? ' · demo' : ''}</span></button>`;
     }
-    html += `<button class="story" data-story="all"><span class="ring"><span class="av" style="font-size:13px">${MONTHS_S[new Date().getMonth()].toUpperCase()}</span></span><span>Month</span></button>`;
     $('stories').innerHTML = html;
   }
   $('stories').addEventListener('click', (e) => {
+    if (e.target.closest('.plus')) { openPost(); return; }
     const b = e.target.closest('[data-story]');
     if (!b) return;
-    if (b.dataset.story === 'new') openPost(); else openStory(b.dataset.story);
+    openStory(b.dataset.story);
   });
 
   // ---- full-screen story viewer ----
-  let svItems = [], svIndex = 0, svTimer = null;
-  function openStory(startId) {
-    svItems = [...state.habits.map((h) => h.id), 'all'];
-    svIndex = Math.max(0, svItems.indexOf(startId));
-    $('svAvatar').textContent = ((state.name || '').trim()[0] || 'S').toUpperCase();
-    $('svName').textContent = (state.name || '').trim() || 'Summit';
+  let svProfile = null, svItems = [], svIndex = 0, svTimer = null;
+  function openStory(pid) {
+    const p = profileOf(pid);
+    if (!p) return;
+    svProfile = p;
+    svItems = [...p.habits.map((h) => h.id), 'all'];
+    svIndex = 0;
+    $('svAvatar').textContent = initialOf(p.id === 'me' ? state.name : p.name);
+    $('svName').textContent = displayName(p);
+    $('svShare').hidden = p.id !== 'me';
     $('storyView').hidden = false;
     showStoryItem();
   }
@@ -551,9 +603,9 @@
     clearTimeout(svTimer);
     const id = svItems[svIndex];
     shareTarget = id; shareStyle = 'card';
-    drawCard();
+    drawCardFor(svProfile);
     $('svImg').src = $('shareCanvas').toDataURL('image/png');
-    $('svSub').textContent = id === 'all' ? MONTHS[new Date().getMonth()] : (habitById(id) || {}).name || '';
+    $('svSub').textContent = (id === 'all' ? MONTHS[new Date().getMonth()] : (habitIn(svProfile, id) || {}).name || '') + (svProfile.demo ? ' · demo' : '');
     $('svBars').innerHTML = svItems.map((_, i) => `<i class="${i < svIndex ? 'done' : i === svIndex ? 'live' : ''}"></i>`).join('');
     svTimer = setTimeout(nextStory, 6000);
   }
@@ -574,26 +626,28 @@
   async function renderFeed() {
     renderStories();
     const el = $('feedList');
-    const name = (state.name || '').trim() || 'You';
-    const initial = name[0].toUpperCase();
-    if (!state.posts.length) {
+    const posts = allPosts();
+    if (!posts.length) {
       el.innerHTML = `<div class="empty-state">No sessions yet.<br>Post one and it shows up here with your stats stamped on it.<br><button class="primary" id="emptyNew">New session</button></div>`;
       $('emptyNew').onclick = openPost;
       return;
     }
-    const ranked = feedMode === 'foryou' ? rankFeed(state.posts, state) : state.posts.map((p) => ({ p, why: '' }));
+    const ranked = feedMode === 'foryou' ? rankFeed(posts, state) : posts.slice().sort((a, b) => b.ts - a.ts).map((p) => ({ p, why: '' }));
     let html = `<div class="feed-toggle"><button data-mode="foryou" class="${feedMode === 'foryou' ? 'on' : ''}">For you</button><button data-mode="latest" class="${feedMode === 'latest' ? 'on' : ''}">Latest</button></div>`;
     for (const { p, why } of ranked) {
-      const lines = p.habits.map((id) => habitById(id)).filter(Boolean);
+      const author = profileOf(p.author) || state;
+      const mine = author.id === 'me';
+      const name = displayName(author);
+      const lines = p.habits.map((id) => habitIn(author, id)).filter(Boolean);
       const top = Math.max(0, ...Object.values(p.streaks || {}));
       const stamp = lines.length ? `<div class="stamp"><span class="sm">${MARK} Summit</span>${lines.map((h) => `<span class="row">${esc(h.name)}<em>&#9650; ${p.streaks[h.id] || 0}</em></span>`).join('')}</div>` : '';
       const media = p.photo
         ? `<div class="post-media"><img data-photo="${p.photo}" alt="">${stamp}</div>`
         : `<div class="post-media nophoto"><div class="bigstat"><b>${top}</b><span>day streak</span></div>${stamp}</div>`;
       html += `<article class="post" id="post-${p.id}">
-        <div class="post-head"><span class="avatar">${initial}</span><div class="who"><b>${esc(name)}</b><small>${lines.map((h) => esc(h.name)).join(' · ') || 'Session'}</small></div><time>${timeAgo(p.ts)}</time><button class="more" data-more="${p.id}" aria-label="More">&middot;&middot;&middot;</button></div>
+        <div class="post-head"><button class="avatar" data-story="${author.id}">${initialOf(mine ? state.name : author.name)}</button><div class="who"><b>${esc(name)}${author.demo ? '<span class="tag">demo</span>' : ''}</b><small>${lines.map((h) => esc(h.name)).join(' · ') || 'Session'}</small></div><time>${timeAgo(p.ts)}</time>${mine ? `<button class="more" data-more="${p.id}" aria-label="More">&middot;&middot;&middot;</button>` : ''}</div>
         ${media}
-        <div class="post-actions"><button data-sharepost="${p.id}">${SHARE_ICON} Share to story</button><span class="spacer"></span>${why ? `<span class="why">${esc(why)}</span>` : ''}</div>
+        <div class="post-actions">${mine ? `<button data-sharepost="${p.id}">${SHARE_ICON} Share to story</button>` : `<button data-story="${author.id}">${MARK.replace('<svg', '<svg style="width:18px;height:18px"')} View story</button>`}<span class="spacer"></span>${why ? `<span class="why">${esc(why)}</span>` : ''}</div>
         ${p.caption ? `<p class="caption"><b>${esc(name)}</b>${esc(p.caption)}</p>` : ''}
       </article>`;
     }
@@ -612,6 +666,8 @@
       save(); renderFeed();
       return;
     }
+    const st = e.target.closest('[data-story]');
+    if (st) { openStory(st.dataset.story); return; }
     const sp = e.target.closest('[data-sharepost]');
     if (sp) sharePost(sp.dataset.sharepost);
   });
@@ -637,9 +693,9 @@
     const u = c.width / 1080; // scale units to the image
     const lines = p.habits.map((hid) => habitById(hid)).filter(Boolean);
     ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 24 * u; ctx.shadowOffsetY = 4 * u;
-    const pad = 56 * u, rowH = 64 * u;
+    const gap = 56 * u;
     const boxW = 420 * u, boxH = (60 + lines.length * 64 + 24) * u;
-    const x = pad, y = c.height - pad - boxH;
+    const x = gap, y = c.height - gap - boxH;
     ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.42)'; ctx.beginPath(); ctx.roundRect(x, y, boxW, boxH, 24 * u); ctx.fill(); ctx.restore();
     mark(ctx, x + 26 * u, y + 18 * u, 40 * u);
     txt(ctx, 'SUMMIT', x + 76 * u, y + 50 * u, { size: 24 * u, weight: 800, align: 'left', spacing: 6 * u, alpha: 0.85 });
@@ -708,10 +764,10 @@
     ctx.fillText(s, x, y);
     ctx.restore();
   }
-  function bar(ctx, x, y, keys, hid, w, gap, h) {
+  function bar(ctx, x, y, keys, hid, w, gap, h, checks) {
     const tk = todayKey();
     for (const k of keys) {
-      const on = isDone(hid, k);
+      const on = isDoneIn(checks, hid, k);
       ctx.save();
       ctx.globalAlpha = on ? 1 : k > tk ? 0.18 : 0.32;
       ctx.fillStyle = on ? '#f3bd6a' : '#fff';
@@ -730,7 +786,9 @@
     return `${MONTHS_S[t.getMonth()].toUpperCase()} ${t.getDate()}, ${t.getFullYear()}`;
   }
 
-  function drawCard() {
+  // Draws the current shareTarget for a given profile (yours by default) into the share canvas.
+  function drawCardFor(profile) {
+    const checks = profile.checks;
     const c = $('shareCanvas');
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, W, H);
@@ -744,39 +802,38 @@
     }
     ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 28; ctx.shadowOffsetY = 6;
     const cx = W / 2, wk = weekKeys();
+    const t = new Date();
 
     if (shareTarget === 'all') {
       wordmark(ctx, 430);
-      const t = new Date();
       const prefix = key(t.getFullYear(), t.getMonth(), 1).slice(0, 7);
-      const active = Object.keys(state.checks).filter((k) => k.startsWith(prefix) && Object.keys(state.checks[k]).length).length;
+      const active = Object.keys(checks).filter((k) => k.startsWith(prefix) && Object.keys(checks[k]).length).length;
       txt(ctx, String(active), cx, 740, { size: 230, weight: 800, spacing: -8 });
       txt(ctx, `DAYS ACTIVE IN ${MONTHS[t.getMonth()].toUpperCase()}`, cx, 815, { size: 34, weight: 700, spacing: 8, alpha: 0.75 });
-      const rows = state.habits.slice(0, 6);
+      const rows = profile.habits.slice(0, 6);
       let y = 960;
       for (const h of rows) {
-        const s = currentStreak(h.id);
+        const s = streakAtIn(checks, h.id, todayKey());
         txt(ctx, h.name || 'Untitled', 180, y, { size: 54, weight: 700, align: 'left' });
         txt(ctx, s ? `▲ ${s}` : '—', 900, y, { size: 54, weight: 800, align: 'right', color: s ? '#f3bd6a' : '#fff', alpha: s ? 1 : 0.4 });
-        bar(ctx, 180, y + 30, wk, h.id, 86, 12, 12);
+        bar(ctx, 180, y + 30, wk, h.id, 86, 12, 12, checks);
         y += 160;
       }
-      if (state.habits.length > 6) { txt(ctx, `+${state.habits.length - 6} more`, 180, y, { size: 36, align: 'left', alpha: 0.6 }); y += 60; }
+      if (profile.habits.length > 6) { txt(ctx, `+${profile.habits.length - 6} more`, 180, y, { size: 36, align: 'left', alpha: 0.6 }); y += 60; }
       txt(ctx, dateLine(), cx, y + 50, { size: 30, weight: 600, spacing: 6, alpha: 0.5 });
     } else {
-      const h = habitById(shareTarget);
+      const h = habitIn(profile, shareTarget);
       if (!h) return;
-      const s = currentStreak(h.id);
-      const t = new Date();
+      const s = streakAtIn(checks, h.id, todayKey());
       wordmark(ctx, 540);
       txt(ctx, (h.name || 'Untitled').toUpperCase(), cx, 700, { size: 46, weight: 700, spacing: 10, alpha: 0.8 });
       txt(ctx, String(s), cx, 980, { size: 320, weight: 800, spacing: -12 });
       txt(ctx, 'DAY STREAK', cx, 1050, { size: 40, weight: 700, spacing: 10, alpha: 0.8 });
-      bar(ctx, cx - (7 * 96 + 6 * 14) / 2, 1120, wk, h.id, 96, 14, 14);
+      bar(ctx, cx - (7 * 96 + 6 * 14) / 2, 1120, wk, h.id, 96, 14, 14, checks);
       const cols = [
-        ['THIS WEEK', `${wk.filter((k) => isDone(h.id, k)).length}/7`],
-        ['THIS MONTH', String(monthCount(h.id, t.getFullYear(), t.getMonth()))],
-        ['BEST', String(bestStreak(h.id))],
+        ['THIS WEEK', `${wk.filter((k) => isDoneIn(checks, h.id, k)).length}/7`],
+        ['THIS MONTH', String(monthCount(h.id, t.getFullYear(), t.getMonth(), checks))],
+        ['BEST', String(bestStreak(h.id, checks))],
       ];
       cols.forEach(([label, val], i) => {
         const x = cx + (i - 1) * 300;
@@ -794,6 +851,7 @@
       $('shareBtn').disabled = false;
     }, 'image/png');
   }
+  const drawCard = () => drawCardFor(state);
 
   function openShare(target) {
     shareTarget = target;
