@@ -29,7 +29,7 @@
     } catch (_) {}
     return fill({ habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {} });
   }
-  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (s.demo === undefined) s.demo = true; s.id = 'me'; return s; }
+  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (s.demo === undefined) s.demo = true; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
 
   // ---- photo + backup store (IndexedDB) ----
   const photos = {
@@ -152,7 +152,7 @@
   // Until there are accounts, a few demo athletes with generated logs. They go through the
   // same profile shape { id, name, habits, checks, posts } that real followed users will.
   function seeded(seed) { let x = seed >>> 0; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; }
-  function makeDemo(id, name, bio, lines, probs, captions, seed) {
+  function makeDemo(id, name, bio, lines, probs, captions, seed, followsYou) {
     const rnd = seeded(seed);
     const habits = lines.map((n, i) => ({ id: `${id}-${i}`, name: n }));
     const checks = {};
@@ -171,15 +171,24 @@
         caption: captions[posts.length % captions.length], habits: done.map((h) => h.id), photo: null,
         streaks: Object.fromEntries(done.map((h) => [h.id, streakAtIn(checks, h.id, k)])) });
     }
-    return { id, name, bio, demo: true, habits, checks, posts };
+    return { id, name, bio, demo: true, followsYou: !!followsYou, habits, checks, posts };
   }
   const DEMO = [
-    makeDemo('maya', 'Maya', 'Marathon block. Miles before coffee.', ['Run', 'Mobility'], [0.8, 0.5], ['Easy miles, legs felt fresh.', 'Tempo day. Humid.', 'Long run done.'], 11),
-    makeDemo('dre', 'Dre', 'Lift heavy, eat clean.', ['Lift', 'Protein'], [0.75, 0.65], ['Pull day. Grip gave out first.', 'PR on squat.', 'Deload, still showed up.'], 23),
-    makeDemo('jules', 'Jules', 'Open water season.', ['Swim', 'Sober'], [0.6, 0.92], ['Early laps.', '2k in the lake.', 'Drills only.'], 37),
-    makeDemo('kofi', 'Kofi', 'Hoops and sleep.', ['Hoop', 'Sleep by 11'], [0.7, 0.5], ['Pickup run, lost twice.', 'Shooting drills.', 'Full court, finally.'], 41),
+    makeDemo('maya', 'Maya', 'Marathon block. Miles before coffee.', ['Run', 'Mobility'], [0.8, 0.5], ['Easy miles, legs felt fresh.', 'Tempo day. Humid.', 'Long run done.'], 11, true),
+    makeDemo('dre', 'Dre', 'Lift heavy, eat clean.', ['Lift', 'Protein'], [0.75, 0.65], ['Pull day. Grip gave out first.', 'PR on squat.', 'Deload, still showed up.'], 23, false),
+    makeDemo('jules', 'Jules', 'Open water season.', ['Swim', 'Sober'], [0.6, 0.92], ['Early laps.', '2k in the lake.', 'Drills only.'], 37, true),
+    makeDemo('kofi', 'Kofi', 'Hoops and sleep.', ['Hoop', 'Sleep by 11'], [0.7, 0.5], ['Pickup run, lost twice.', 'Shooting drills.', 'Full court, finally.'], 41, false),
   ];
   const people = () => (state.demo === false ? [] : DEMO);
+  // Following: null means "everyone available" until the first unfollow materializes the list.
+  const isFollowing = (id) => (state.following ? state.following.includes(id) : true);
+  function toggleFollow(id) {
+    if (!state.following) state.following = people().map((p) => p.id);
+    state.following = isFollowing(id) ? state.following.filter((x) => x !== id) : [...state.following, id];
+    save();
+  }
+  const following = () => people().filter((p) => isFollowing(p.id));
+  const friends = () => following().filter((p) => p.followsYou);
   const profileOf = (id) => (!id || id === 'me' ? state : people().find((p) => p.id === id) || null);
   const habitIn = (profile, id) => profile && profile.habits.find((x) => x.id === id);
   const habitById = (id) => habitIn(state, id);
@@ -573,7 +582,7 @@
   function renderStories() {
     const mine = state.habits.some((h) => currentStreak(h.id) > 0);
     let html = `<button class="story" data-story="me"><span class="ring${mine ? '' : ' dim'}"><span class="av">${initialOf(state.name)}</span><i class="plus" data-story="new">+</i></span><span>Your story</span></button>`;
-    for (const p of people()) {
+    for (const p of following()) {
       html += `<button class="story" data-story="${p.id}"><span class="ring${p.demo ? ' demo' : ''}"><span class="av">${initialOf(p.name)}</span></span><span>${esc(p.name)}${p.demo ? ' · demo' : ''}</span></button>`;
     }
     $('stories').innerHTML = html;
@@ -596,9 +605,24 @@
     $('svAvatar').textContent = initialOf(p.id === 'me' ? state.name : p.name);
     $('svName').textContent = displayName(p);
     $('svShare').hidden = p.id !== 'me';
+    $('svFollow').hidden = p.id === 'me';
+    renderFollowBtn($('svFollow'), p.id);
     $('storyView').hidden = false;
     showStoryItem();
   }
+  function renderFollowBtn(btn, pid) {
+    const on = isFollowing(pid);
+    btn.textContent = on ? 'Following' : 'Follow';
+    btn.classList.toggle('on', on);
+    btn.dataset.follow = pid;
+  }
+  function onFollowClick(pid) {
+    toggleFollow(pid);
+    if (!$('storyView').hidden) renderFollowBtn($('svFollow'), pid);
+    if (screen === 'feed') renderFeed();
+    if (screen === 'profile') renderProfile();
+  }
+  $('svFollow').onclick = () => { clearTimeout(svTimer); onFollowClick(svProfile.id); svTimer = setTimeout(nextStory, 6000); };
   function showStoryItem() {
     clearTimeout(svTimer);
     const id = svItems[svIndex];
@@ -645,7 +669,7 @@
         ? `<div class="post-media"><img data-photo="${p.photo}" alt="">${stamp}</div>`
         : `<div class="post-media nophoto"><div class="bigstat"><b>${top}</b><span>day streak</span></div>${stamp}</div>`;
       html += `<article class="post" id="post-${p.id}">
-        <div class="post-head"><button class="avatar" data-story="${author.id}">${initialOf(mine ? state.name : author.name)}</button><div class="who"><b>${esc(name)}${author.demo ? '<span class="tag">demo</span>' : ''}</b><small>${lines.map((h) => esc(h.name)).join(' · ') || 'Session'}</small></div><time>${timeAgo(p.ts)}</time>${mine ? `<button class="more" data-more="${p.id}" aria-label="More">&middot;&middot;&middot;</button>` : ''}</div>
+        <div class="post-head"><button class="avatar" data-story="${author.id}">${initialOf(mine ? state.name : author.name)}</button><div class="who"><b>${esc(name)}${author.demo ? '<span class="tag">demo</span>' : ''}</b><small>${lines.map((h) => esc(h.name)).join(' · ') || 'Session'}</small></div>${mine ? '' : `<button class="ghost follow${isFollowing(author.id) ? ' on' : ''}" data-follow="${author.id}">${isFollowing(author.id) ? 'Following' : 'Follow'}</button>`}<time>${timeAgo(p.ts)}</time>${mine ? `<button class="more" data-more="${p.id}" aria-label="More">&middot;&middot;&middot;</button>` : ''}</div>
         ${media}
         <div class="post-actions">${mine ? `<button data-sharepost="${p.id}">${SHARE_ICON} Share to story</button>` : `<button data-story="${author.id}">${MARK.replace('<svg', '<svg style="width:18px;height:18px"')} View story</button>`}<span class="spacer"></span>${why ? `<span class="why">${esc(why)}</span>` : ''}</div>
         ${p.caption ? `<p class="caption"><b>${esc(name)}</b>${esc(p.caption)}</p>` : ''}
@@ -666,6 +690,8 @@
       save(); renderFeed();
       return;
     }
+    const fl = e.target.closest('[data-follow]');
+    if (fl) { onFollowClick(fl.dataset.follow); return; }
     const st = e.target.closest('[data-story]');
     if (st) { openStory(st.dataset.story); return; }
     const sp = e.target.closest('[data-sharepost]');
@@ -717,7 +743,8 @@
     const name = (state.name || '').trim();
     $('profileHandle').textContent = name || 'Summit';
     $('profileBio').textContent = state.bio || '';
-    $('cSessions').textContent = state.posts.length;
+    $('cFriends').textContent = friends().length;
+    $('cFollowing').textContent = following().length;
     $('cDays').textContent = activeDays();
     $('cBest').textContent = Math.max(0, ...state.habits.map((h) => bestStreak(h.id)));
     $('highlights').innerHTML = state.habits.map((h) => {

@@ -472,9 +472,15 @@ body:not([data-screen="home"]) .checkin { display: none; }
 /* ===== Profile ===== */
 .profile-head { position: relative; display: flex; align-items: center; gap: 22px; padding: 6px 20px 10px; }
 .avatar.big { width: 84px; height: 84px; font-size: 32px; border: 2px solid var(--amber); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px rgba(227,154,58,0.35); flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,0.12); font-weight: 700; }
-.counts { flex: 1; display: flex; justify-content: space-around; text-align: center; }
-.counts b { display: block; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.counts span { font-size: 12px; color: var(--ink-2); }
+.counts { flex: 1; display: flex; justify-content: space-between; text-align: center; gap: 4px; }
+.counts > div { flex: 1; min-width: 0; }
+.counts b { display: block; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.counts span { font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.profile-head { gap: 16px; }
+.follow { padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; }
+.follow.on { background: rgba(255,255,255,0.12); border-color: transparent; color: var(--ink-2); }
+.sv-foot .follow { width: 100%; max-width: 360px; padding: 14px; font-size: 16px; }
+.post-head .follow { padding: 6px 12px; font-size: 12px; margin-right: 4px; }
 .handle { font-size: 20px; }
 .bio { position: relative; margin: 0 20px 12px; font-size: 14px; color: var(--ink-2); }
 .bio:empty { display: none; }
