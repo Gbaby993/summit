@@ -775,8 +775,6 @@
     $('profileBio').textContent = state.bio || '';
     $('cFollowers').textContent = followers().length;
     $('cFollowing').textContent = following().length;
-    $('cDays').textContent = activeDays();
-    $('cBest').textContent = Math.max(0, ...state.habits.map((h) => bestStreak(h.id)));
     const tags = (state.sports && state.sports.length) ? state.sports : state.habits.map((h) => h.name).filter(Boolean);
     const shown = tags.slice(0, 5);
     $('sports').innerHTML = shown.map((t, i) => `<button class="sport-tag c${i % 5}" data-edit-sports>${esc(t)}</button>`).join('')
