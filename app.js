@@ -410,49 +410,72 @@
   const OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>';
   const longDate = (ts) => { const d = new Date(ts); return `${MONTHS_S[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`; };
   function oneYearFrom(ts) { const d = new Date(ts); d.setFullYear(d.getFullYear() + 1); return d.getTime(); }
-  let letterOpen = null; // id of the unlocked letter being read
+  let letterPick = 'new'; // 'new' or a letter id chosen in the dropdown
   function renderLetter() {
     const wrap = $('letterWrap');
     const now = Date.now();
     const letters = state.letters.slice().sort((a, b) => b.ts - a.ts);
-    let html = '';
-    if (letterOpen) {
-      const l = letters.find((x) => x.id === letterOpen);
-      if (l && now >= l.unlockTs) {
-        html += `<div class="letter-read">${esc(l.text)}<span class="from">Written ${longDate(l.ts)}. Opened ${longDate(now)}.</span></div>
-          <div class="sheet-actions"><button class="ghost" id="letterBack">Back</button></div>`;
-        wrap.innerHTML = html;
-        $('letterBack').onclick = () => { letterOpen = null; renderLetter(); };
-        return;
+    if (letterPick !== 'new' && !letters.some((l) => l.id === letterPick)) letterPick = 'new';
+
+    // Dropdown: every letter, grouped by the year it was written.
+    const years = [...new Set(letters.map((l) => new Date(l.ts).getFullYear()))];
+    let pick = `<div class="letter-bar"><select id="letterPick" aria-label="Your letters"><option value="new"${letterPick === 'new' ? ' selected' : ''}>New letter</option>`;
+    for (const y of years) {
+      pick += `<optgroup label="${y}">`;
+      for (const l of letters.filter((x) => new Date(x.ts).getFullYear() === y)) {
+        const d = new Date(l.ts);
+        const unlocked = now >= l.unlockTs;
+        const daysLeft = Math.max(0, Math.ceil((l.unlockTs - now) / 864e5));
+        pick += `<option value="${l.id}"${letterPick === l.id ? ' selected' : ''}>${MONTHS_S[d.getMonth()]} ${d.getDate()} · ${unlocked ? 'Open' : `Sealed, ${daysLeft}d`}</option>`;
       }
-      letterOpen = null;
+      pick += '</optgroup>';
     }
-    for (const l of letters) {
-      const unlocked = now >= l.unlockTs;
-      const daysLeft = Math.max(0, Math.ceil((l.unlockTs - now) / 864e5));
-      const pct = Math.min(100, Math.round(((now - l.ts) / (l.unlockTs - l.ts)) * 100));
-      html += unlocked
-        ? `<button class="seal open" data-open-letter="${l.id}"><div class="lock">${OPEN}</div><h3>Ready to open</h3><p>Written ${longDate(l.ts)}. Tap to read it.</p></button>`
-        : `<div class="seal"><div class="lock">${LOCK}</div><h3>Sealed</h3><p>Written ${longDate(l.ts)}. Opens ${longDate(l.unlockTs)}.</p><div class="days"><b>${daysLeft}</b><span>days left</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+    pick += `</select><span class="letter-count">${letters.length ? `${letters.length} letter${letters.length === 1 ? '' : 's'}` : ''}</span></div>`;
+
+    let html = pick;
+    const chosen = letterPick === 'new' ? null : letters.find((l) => l.id === letterPick);
+    if (chosen) {
+      const unlocked = now >= chosen.unlockTs;
+      if (unlocked) {
+        html += `<div class="letter-read">${esc(chosen.text)}<span class="from">Written ${longDate(chosen.ts)}. Opened ${longDate(now)}.</span></div>`;
+      } else {
+        const daysLeft = Math.max(0, Math.ceil((chosen.unlockTs - now) / 864e5));
+        const pct = Math.min(100, Math.round(((now - chosen.ts) / (chosen.unlockTs - chosen.ts)) * 100));
+        html += `<div class="seal"><div class="lock">${LOCK}</div><h3>Sealed</h3><p>Written ${longDate(chosen.ts)}. Opens ${longDate(chosen.unlockTs)}.</p><div class="days"><b>${daysLeft}</b><span>days left</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>
+          <p class="letter-intro">It opens on its own when the day comes. Until then it stays shut.</p>`;
+      }
+    } else {
+      const ready = letters.filter((l) => now >= l.unlockTs && !l.read);
+      if (ready.length) html += `<button class="seal open" data-open-letter="${ready[0].id}"><div class="lock">${OPEN}</div><h3>A letter is ready</h3><p>Written ${longDate(ready[0].ts)}. Tap to read it.</p></button>`;
+      html += `<p class="letter-intro">${letters.length ? 'Write another.' : 'Write to the you one year from now.'} Once you seal it, it locks until the same date next year. No peeking, no edits.</p>
+        <textarea class="letter-paper" id="letterText" maxlength="4000" placeholder="Dear me, a year from now…"></textarea>
+        <div class="letter-foot"><small id="letterOpens">Opens ${longDate(oneYearFrom(now))}</small><button class="primary" id="sealBtn">Seal for one year</button></div>`;
     }
-    html += `<p class="letter-intro">${letters.length ? 'Write another.' : 'Write to the you one year from now.'} Once you seal it, it locks until the same date next year. No peeking, no edits.</p>
-      <textarea class="letter-paper" id="letterText" maxlength="4000" placeholder="Dear me, a year from now…"></textarea>
-      <div class="letter-foot"><small id="letterOpens">Opens ${longDate(oneYearFrom(now))}</small><button class="primary" id="sealBtn">Seal for one year</button></div>`;
     wrap.innerHTML = html;
-    $('sealBtn').onclick = () => {
-      const text = $('letterText').value.trim();
-      if (!text) { $('letterText').focus(); return; }
-      if (!confirm(`Seal this letter until ${longDate(oneYearFrom(Date.now()))}? You won't be able to read or change it before then.`)) return;
-      const ts = Date.now();
-      state.letters.push({ id: uid(), ts, unlockTs: oneYearFrom(ts), text });
-      save();
-      renderLetter();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
+
+    $('letterPick').onchange = (e) => { letterPick = e.target.value; markRead(); renderLetter(); };
+    if (!chosen) {
+      $('sealBtn').onclick = () => {
+        const text = $('letterText').value.trim();
+        if (!text) { $('letterText').focus(); return; }
+        if (!confirm(`Seal this letter until ${longDate(oneYearFrom(Date.now()))}? You won't be able to read or change it before then.`)) return;
+        const ts = Date.now();
+        const l = { id: uid(), ts, unlockTs: oneYearFrom(ts), text };
+        state.letters.push(l);
+        save();
+        letterPick = l.id;
+        renderLetter();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+    }
+    function markRead() {
+      const l = state.letters.find((x) => x.id === letterPick);
+      if (l && Date.now() >= l.unlockTs && !l.read) { l.read = true; save(); }
+    }
   }
   $('letterWrap').addEventListener('click', (e) => {
     const b = e.target.closest('[data-open-letter]');
-    if (b) { letterOpen = b.dataset.openLetter; renderLetter(); }
+    if (b) { letterPick = b.dataset.openLetter; const l = state.letters.find((x) => x.id === letterPick); if (l) { l.read = true; save(); } renderLetter(); }
   });
 
   // ---- daily page: the ideas of Atomic Habits, in our own words ----
