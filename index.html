@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Summit</title>
+<meta name="description" content="A quiet daily log. One line per habit, one mark per day.">
+<meta name="theme-color" content="#f6f2ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Summit">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <button class="nav" id="prev" aria-label="Previous month">&#8249;</button>
+  <div class="title">
+    <h1 id="monthName">Month</h1>
+    <span class="year" id="yearName">Year</span>
+  </div>
+  <button class="nav" id="next" aria-label="Next month">&#8250;</button>
+</header>
+
+<main>
+  <div class="grid-wrap" id="gridWrap">
+    <table class="grid" id="grid" aria-label="Habit grid"></table>
+  </div>
+  <button class="add" id="addHabit">+ Add a line</button>
+  <p class="hint">Tap a square to mark the day. Tap a name to rename it.</p>
+</main>
+
+<footer class="bottom">
+  <button class="ghost" id="todayBtn">Today</button>
+  <button class="ghost" id="menuBtn" aria-label="More">&middot;&middot;&middot;</button>
+</footer>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<section class="sheet" id="sheet" hidden aria-modal="true" role="dialog">
+  <div class="sheet-handle"></div>
+  <label class="field">
+    <span>Name</span>
+    <input id="habitName" type="text" maxlength="28" autocomplete="off" autocapitalize="words" enterkeyhint="done">
+  </label>
+  <div class="stat-row">
+    <div><strong id="statStreak">0</strong><span>streak</span></div>
+    <div><strong id="statBest">0</strong><span>best</span></div>
+    <div><strong id="statMonth">0</strong><span>this month</span></div>
+    <div><strong id="statTotal">0</strong><span>all time</span></div>
+  </div>
+  <div class="sheet-actions">
+    <button class="ghost" id="moveUp">&uarr; Move up</button>
+    <button class="ghost" id="moveDown">&darr; Move down</button>
+  </div>
+  <div class="sheet-actions">
+    <button class="danger" id="deleteHabit">Delete</button>
+    <button class="primary" id="doneHabit">Done</button>
+  </div>
+</section>
+
+<section class="sheet" id="menu" hidden aria-modal="true" role="dialog">
+  <div class="sheet-handle"></div>
+  <h2>Summit</h2>
+  <p class="muted">Your log lives on this device only. Export now and then to keep a copy.</p>
+  <div class="sheet-actions">
+    <button class="ghost" id="exportBtn">Export</button>
+    <button class="ghost" id="importBtn">Import</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+  </div>
+  <div class="sheet-actions">
+    <button class="primary" id="closeMenu">Close</button>
+  </div>
+</section>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "Summit",
+  "short_name": "Summit",
+  "description": "A quiet daily log. One line per habit, one mark per day.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f2ea",
+  "theme_color": "#f6f2ea",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
