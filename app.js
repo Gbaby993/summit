@@ -29,7 +29,7 @@
     } catch (_) {}
     return fill({ habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {} });
   }
-  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (!Array.isArray(s.sports)) s.sports = []; if (s.demo === undefined) s.demo = true; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
+  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (!Array.isArray(s.sports)) s.sports = []; if (!s.todos || typeof s.todos !== 'object') s.todos = {}; if (s.demo === undefined) s.demo = true; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
 
   // ---- photo + backup store (IndexedDB) ----
   const photos = {
@@ -292,8 +292,59 @@
     $('grid').innerHTML = head + body;
   }
 
+  // ---- top 3 for today ----
+  function todayTodos() {
+    const tk = todayKey();
+    const list = (state.todos[tk] ||= []);
+    while (list.length < 3) list.push({ text: '', done: false });
+    return list;
+  }
+  function renderTop3() {
+    const list = todayTodos();
+    const done = list.filter((t) => t.text.trim() && t.done).length;
+    $('top3Count').textContent = `${done} / 3`;
+    $('top3').innerHTML = list.map((t, i) => `<div class="todo${t.done && t.text.trim() ? ' done' : ''}">
+      <span class="num">${i + 1}</span>
+      <button class="tick" data-todo-toggle="${i}" aria-label="Done">${CHECK}</button>
+      <input data-todo="${i}" value="${esc(t.text)}" maxlength="60" autocomplete="off" enterkeyhint="next" placeholder="${['What matters most today?', 'Second', 'Third'][i]}">
+    </div>`).join('');
+  }
+  function pruneTodos() {
+    const cutoff = shift(todayKey(), -90);
+    for (const k of Object.keys(state.todos)) if (k < cutoff) delete state.todos[k];
+  }
+  $('top3').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-todo-toggle]');
+    if (!b) return;
+    const list = todayTodos();
+    const t = list[+b.dataset.todoToggle];
+    if (!t.text.trim()) { const inp = $('top3').querySelector(`[data-todo="${b.dataset.todoToggle}"]`); if (inp) inp.focus(); return; }
+    t.done = !t.done;
+    if (navigator.vibrate) navigator.vibrate(8);
+    pruneTodos(); save(); renderTop3();
+  });
+  $('top3').addEventListener('input', (e) => {
+    const inp = e.target.closest('[data-todo]');
+    if (!inp) return;
+    const list = todayTodos();
+    const t = list[+inp.dataset.todo];
+    t.text = inp.value;
+    if (!t.text.trim()) t.done = false;
+    inp.closest('.todo').classList.toggle('done', t.done && !!t.text.trim());
+    pruneTodos(); save();
+    const done = list.filter((x) => x.text.trim() && x.done).length;
+    $('top3Count').textContent = `${done} / 3`;
+  });
+  $('top3').addEventListener('keydown', (e) => {
+    const inp = e.target.closest('[data-todo]');
+    if (!inp || e.key !== 'Enter') return;
+    e.preventDefault();
+    const next = $('top3').querySelector(`[data-todo="${+inp.dataset.todo + 1}"]`);
+    if (next) next.focus(); else inp.blur();
+  });
+
   function render() {
-    renderTop(); renderCards(); renderGrid();
+    renderTop(); renderCards(); renderGrid(); renderTop3();
     if (screen === 'feed') renderFeed();
     if (screen === 'profile') renderProfile();
   }
