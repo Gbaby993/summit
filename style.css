@@ -486,12 +486,15 @@ body:not([data-screen="home"]) .checkin { display: none; }
 .bio:empty { display: none; }
 .profile-actions { position: relative; display: flex; gap: 8px; padding: 0 20px 16px; }
 .ghost.block { flex: 1; text-align: center; padding: 10px 0; font-size: 14px; border-radius: 10px; }
-.highlights { position: relative; display: flex; gap: 16px; padding: 0 20px 16px; overflow-x: auto; scrollbar-width: none; }
-.highlights::-webkit-scrollbar { display: none; }
-.hl { flex: none; width: 64px; text-align: center; }
-.hl .ring { width: 60px; height: 60px; margin: 0 auto 6px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 18px; border: 1.5px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); font-variant-numeric: tabular-nums; }
-.hl .ring.hot { border-color: var(--amber); color: var(--amber-2); }
-.hl span { display: block; font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sports { position: relative; display: flex; flex-wrap: wrap; gap: 8px; padding: 0 20px 16px; }
+.sports:empty { display: none; }
+.sport-tag { padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; background: rgba(255,255,255,0.08); color: var(--ink-2); }
+.sport-tag.c0 { background: rgba(168,120,255,0.16); color: #c9a9ff; }
+.sport-tag.c1 { background: rgba(96,200,120,0.16); color: #8fe0a6; }
+.sport-tag.c2 { background: rgba(255,100,90,0.16); color: #ff9a90; }
+.sport-tag.c3 { background: rgba(90,160,255,0.16); color: #9cc4ff; }
+.sport-tag.c4 { background: rgba(227,154,58,0.18); color: var(--amber-2); }
+.sport-tag.more { background: transparent; border: 1px solid rgba(255,255,255,0.18); }
 .pgrid { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; border-top: 1px solid var(--line); padding-top: 2px; }
 .tile { aspect-ratio: 3 / 4; background: #121212; overflow: hidden; position: relative; text-align: left; }
 .tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }

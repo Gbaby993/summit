@@ -29,7 +29,7 @@
     } catch (_) {}
     return fill({ habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {} });
   }
-  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (s.demo === undefined) s.demo = true; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
+  function fill(s) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; if (!Array.isArray(s.sports)) s.sports = []; if (s.demo === undefined) s.demo = true; if (s.following !== null && !Array.isArray(s.following)) s.following = null; s.id = 'me'; return s; }
 
   // ---- photo + backup store (IndexedDB) ----
   const photos = {
@@ -444,12 +444,14 @@
   function openMenu() {
     $('userName').value = state.name || '';
     $('userBio').value = state.bio || '';
+    $('userSports').value = (state.sports || []).join(', ');
     $('demoToggle').checked = state.demo !== false;
     showSheet('menu');
   }
   function closeMenu() {
     state.name = $('userName').value.trim();
     state.bio = $('userBio').value.trim();
+    state.sports = $('userSports').value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 12);
     state.demo = $('demoToggle').checked;
     save(); hideSheets(); renderTop();
     if (screen === 'profile') renderProfile();
@@ -459,7 +461,7 @@
   $('editProfile').onclick = openMenu;
   $('profileMenu').onclick = openMenu;
   $('closeMenu').onclick = closeMenu;
-  for (const id of ['userName', 'userBio']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); closeMenu(); } });
+  for (const id of ['userName', 'userBio', 'userSports']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); closeMenu(); } });
   $('scrim').onclick = () => {
     if (!$('sheet').hidden) closeSheet();
     else if (!$('menu').hidden) closeMenu();
@@ -775,10 +777,10 @@
     $('cFollowing').textContent = following().length;
     $('cDays').textContent = activeDays();
     $('cBest').textContent = Math.max(0, ...state.habits.map((h) => bestStreak(h.id)));
-    $('highlights').innerHTML = state.habits.map((h) => {
-      const s = currentStreak(h.id);
-      return `<button class="hl" data-hl="${h.id}"><span class="ring${s >= 3 ? ' hot' : ''}">${s}</span><span>${esc(h.name) || 'Untitled'}</span></button>`;
-    }).join('');
+    const tags = (state.sports && state.sports.length) ? state.sports : state.habits.map((h) => h.name).filter(Boolean);
+    const shown = tags.slice(0, 5);
+    $('sports').innerHTML = shown.map((t, i) => `<button class="sport-tag c${i % 5}" data-edit-sports>${esc(t)}</button>`).join('')
+      + (tags.length > 5 ? `<button class="sport-tag more" data-edit-sports>+${tags.length - 5} more</button>` : '');
     const g = $('pgrid');
     if (!state.posts.length) {
       g.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No posts yet.<br><button class="primary" id="profileNew">Post a session</button></div>';
@@ -796,7 +798,7 @@
     }).join('');
     for (const img of g.querySelectorAll('img[data-photo]')) photoUrl(img.dataset.photo).then((u) => { if (u) img.src = u; });
   }
-  $('highlights').addEventListener('click', (e) => { const b = e.target.closest('[data-hl]'); if (b) openSheet(b.dataset.hl); });
+  $('sports').addEventListener('click', (e) => { if (e.target.closest('[data-edit-sports]')) { openMenu(); setTimeout(() => $('userSports').focus(), 30); } });
   $('pgrid').addEventListener('click', (e) => {
     const b = e.target.closest('[data-open]');
     if (!b) return;
