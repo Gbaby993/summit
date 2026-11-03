@@ -223,12 +223,64 @@
     const streaks = state.habits.map((h) => currentStreak(h.id));
     const top = Math.max(0, ...streaks);
     const who = n ? `, ${esc(n)}` : '';
-    let line;
-    if (!state.habits.length) line = `Start with one line${who}.<br>Keep it every day.`;
-    else if (top >= 14) line = `${top} days deep${who}.<br>Don't blink now.`;
-    else if (top >= 5) line = `Momentum is real${who}.<br>Keep the chain.`;
-    else line = `Progress is power${who}.<br>Let's lock in.`;
-    $('hero').innerHTML = line;
+    $('hero').innerHTML = heroLine(top, who);
+  }
+
+  // One line a day, picked by the date so it holds all day and changes at midnight.
+  const HERO = {
+    empty: ['Start with one line{who}.<br>Keep it every day.'],
+    start: [
+      'Progress is power{who}.<br>Let\'s lock in.',
+      'Day one or one day{who}.<br>Pick.',
+      'Show up{who}.<br>The rest follows.',
+      'No perfect day{who}.<br>Just today.',
+      'Small reps{who}.<br>Big season.',
+      'Start ugly{who}.<br>Finish anyway.',
+      'Nobody\'s watching{who}.<br>Do it anyway.',
+      'You don\'t need motivation{who}.<br>You need a start.',
+      'Make it boring{who}.<br>Boring wins.',
+      'One check today{who}.<br>That\'s the whole job.',
+      'Energy comes after{who}.<br>Move first.',
+      'Earn the shower{who}.<br>Then earn the rest.',
+      'Future you is watching{who}.<br>Give them something.',
+      'Hard now{who}.<br>Easy later.',
+    ],
+    run: [
+      'Momentum is real{who}.<br>Keep the chain.',
+      'You\'re in it now{who}.<br>Stay in it.',
+      'Consistency is the flex{who}.<br>Keep flexing.',
+      'The chain holds{who}.<br>Don\'t be the weak link.',
+      'Rhythm found{who}.<br>Protect it.',
+      'Quiet work{who}.<br>Loud results later.',
+      'Stack another one{who}.<br>Same as yesterday.',
+      'This is the part that counts{who}.<br>Nobody claps yet.',
+      'Discipline is a streak{who}.<br>Yours is alive.',
+      'Don\'t negotiate{who}.<br>Just check the box.',
+      'Good days build{who}.<br>Keep building.',
+      'The habit is forming{who}.<br>Feed it.',
+      'Tired is fine{who}.<br>Done is better.',
+      'Keep the promise{who}.<br>The one you made to yourself.',
+    ],
+    deep: [
+      '{top} days deep{who}.<br>Don\'t blink now.',
+      '{top} straight{who}.<br>Most people quit by now.',
+      '{top} days{who}.<br>This is who you are now.',
+      'The streak is {top}{who}.<br>So is the standard.',
+      '{top} and counting{who}.<br>Boring. Beautiful.',
+      '{top} in a row{who}.<br>Zero is a long way back.',
+      'Still here at {top}{who}.<br>Of course you are.',
+      '{top} days{who}.<br>Act like you\'ve been here.',
+      '{top} deep{who}.<br>The chain is the trophy.',
+      'Day {top}{who}.<br>Same job. Do it again.',
+      '{top} days{who}.<br>Nobody gave you this.',
+      '{top} straight{who}.<br>Guard it like it\'s fragile.',
+    ],
+  };
+  function heroLine(top, who) {
+    const pool = !state.habits.length ? HERO.empty : top >= 14 ? HERO.deep : top >= 5 ? HERO.run : HERO.start;
+    const dayNum = Math.round(dateFromKey(todayKey()).getTime() / 864e5);
+    const line = pool[dayNum % pool.length];
+    return line.replace(/\{who\}/g, who).replace(/\{top\}/g, top);
   }
 
   function renderCards() {
