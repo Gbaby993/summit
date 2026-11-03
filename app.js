@@ -234,15 +234,19 @@
   function renderCards() {
     const wk = weekKeys();
     const tk = todayKey();
+    const t = new Date();
+    const daysInMonth = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
     let html = '';
     for (const h of state.habits) {
       const done = wk.filter((k) => isDone(h.id, k)).length;
+      const mdone = monthCount(h.id, t.getFullYear(), t.getMonth());
       const s = currentStreak(h.id);
       const segs = wk.map((k) => `<i class="${isDone(h.id, k) ? 'on' : k > tk ? 'future' : ''}"></i>`).join('');
       html += `<button class="card" data-card="${h.id}">
         <span class="label">${esc(h.name) || 'Untitled'}</span>
         <div class="segs">${segs}</div>
         <div class="meta"><span><b>${done}</b> / 7 this week</span><span class="streak-tag">${s ? '&#9650; ' + s + ' streak' : 'no streak'}</span></div>
+        <div class="meta sub"><span><b>${mdone}</b> / ${daysInMonth} this month</span></div>
       </button>`;
     }
     html += '<button class="card add-card" id="addCard">+ New line</button>';

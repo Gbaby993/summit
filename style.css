@@ -114,6 +114,8 @@ input { user-select: text; -webkit-user-select: text; }
 .card .meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .card .meta b { color: var(--ink); font-weight: 600; }
 .card .meta .streak-tag { color: var(--amber-2); font-weight: 600; }
+.card .meta.sub { margin-top: 4px; font-size: 12px; color: var(--ink-3); }
+.card .meta.sub b { color: var(--ink-2); }
 .card.add-card { display: grid; place-items: center; width: 120px; color: var(--ink-2); font-weight: 500; font-size: 14px; }
 
 /* Hero */
