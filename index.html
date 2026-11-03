@@ -4,12 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Summit</title>
-<meta name="description" content="A quiet daily log. One line per habit, one mark per day.">
-<meta name="theme-color" content="#f6f2ea" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Daily training log. One line per habit, one mark per day.">
+<meta name="theme-color" content="#080808">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Summit">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -17,31 +16,45 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="glow" aria-hidden="true"></div>
 
 <header class="top">
-  <button class="nav" id="prev" aria-label="Previous month">&#8249;</button>
-  <div class="title">
-    <h1 id="monthName">Month</h1>
-    <span class="year" id="yearName">Year</span>
-  </div>
-  <button class="nav" id="next" aria-label="Next month">&#8250;</button>
+  <button class="avatar" id="avatarBtn" aria-label="Profile and settings">S</button>
+  <button class="pill ghost" id="todayBtn">Today</button>
 </header>
 
-<main>
+<section class="cards" id="cards" aria-label="This week"></section>
+
+<h1 class="hero" id="hero">Progress is power.<br>Let's lock in.</h1>
+
+<section class="month">
+  <div class="month-head">
+    <button class="nav" id="prev" aria-label="Previous month">&#8249;</button>
+    <div class="month-title"><span id="monthName">Month</span> <span class="year" id="yearName">Year</span></div>
+    <button class="nav" id="next" aria-label="Next month">&#8250;</button>
+  </div>
   <div class="grid-wrap" id="gridWrap">
     <table class="grid" id="grid" aria-label="Habit grid"></table>
   </div>
   <button class="add" id="addHabit">+ Add a line</button>
-  <p class="hint">Tap a square to mark the day. Tap a name to rename it.</p>
-</main>
+</section>
 
-<footer class="bottom">
-  <button class="ghost" id="todayBtn">Today</button>
-  <button class="ghost" id="menuBtn" aria-label="More">&middot;&middot;&middot;</button>
-</footer>
+<button class="checkin" id="checkinBtn">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>
+  Check in
+</button>
 
 <div class="scrim" id="scrim" hidden></div>
 
+<!-- Check-in: today's lines -->
+<section class="sheet" id="checkin" hidden aria-modal="true" role="dialog">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title"><span class="eyebrow" id="checkinDate">Today</span><h2>Check in</h2></div>
+  <div class="checklist" id="checklist"></div>
+  <div class="sheet-actions"><button class="primary" id="closeCheckin">Done</button></div>
+</section>
+
+<!-- Habit detail -->
 <section class="sheet" id="sheet" hidden aria-modal="true" role="dialog">
   <div class="sheet-handle"></div>
   <label class="field">
@@ -64,9 +77,14 @@
   </div>
 </section>
 
+<!-- Profile / settings -->
 <section class="sheet" id="menu" hidden aria-modal="true" role="dialog">
   <div class="sheet-handle"></div>
-  <h2>Summit</h2>
+  <div class="sheet-title"><span class="eyebrow">Profile</span><h2>Summit</h2></div>
+  <label class="field">
+    <span>Your name</span>
+    <input id="userName" type="text" maxlength="20" autocomplete="given-name" autocapitalize="words" enterkeyhint="done" placeholder="First name">
+  </label>
   <p class="muted">Your log lives on this device only. Export now and then to keep a copy.</p>
   <div class="sheet-actions">
     <button class="ghost" id="exportBtn">Export</button>
@@ -74,7 +92,7 @@
     <input type="file" id="importFile" accept="application/json" hidden>
   </div>
   <div class="sheet-actions">
-    <button class="primary" id="closeMenu">Close</button>
+    <button class="primary" id="closeMenu">Done</button>
   </div>
 </section>
 
