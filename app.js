@@ -207,7 +207,7 @@
 
   // ---- sheets (generic) ----
   function showSheet(id) { $('scrim').hidden = false; $(id).hidden = false; }
-  function hideSheets() { $('scrim').hidden = true; for (const id of ['sheet', 'menu', 'checkin']) $(id).hidden = true; }
+  function hideSheets() { $('scrim').hidden = true; for (const id of ['sheet', 'menu', 'checkin', 'share']) $(id).hidden = true; }
 
   // ---- habit sheet ----
   let editing = null;
@@ -299,6 +299,148 @@
     if (!$('sheet').hidden) closeSheet();
     else if (!$('menu').hidden) closeMenu();
     else { hideSheets(); render(); }
+  };
+
+  // ---- share to story (1080x1920 PNG) ----
+  const F = 'system-ui, -apple-system, "Helvetica Neue", "Segoe UI", Arial, sans-serif';
+  const W = 1080, H = 1920;
+  let shareTarget = null, shareStyle = 'sticker', shareFile = null, shareBlob = null;
+
+  function mark(ctx, x, y, size) {
+    const pts = [[96, 352], [224, 176], [288, 264], [336, 208], [416, 352]].map(([px, py]) => [x + px / 512 * size, y + py / 512 * size]);
+    ctx.save();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = size * 18 / 512; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.stroke();
+    ctx.fillStyle = '#e39a3a'; ctx.beginPath(); ctx.arc(pts[1][0], pts[1][1], size * 16 / 512, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  function txt(ctx, s, x, y, o = {}) {
+    const { size = 40, weight = 600, color = '#fff', align = 'center', spacing = 0, alpha = 1 } = o;
+    ctx.save();
+    ctx.globalAlpha = alpha; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+    ctx.font = `${weight} ${size}px ${F}`;
+    try { ctx.letterSpacing = spacing + 'px'; } catch (_) {}
+    ctx.fillText(s, x, y);
+    ctx.restore();
+  }
+  function bar(ctx, x, y, keys, hid, w, gap, h) {
+    const tk = todayKey();
+    for (const k of keys) {
+      const on = isDone(hid, k);
+      ctx.save();
+      ctx.globalAlpha = on ? 1 : k > tk ? 0.18 : 0.32;
+      ctx.fillStyle = on ? '#f3bd6a' : '#fff';
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.fill();
+      ctx.restore();
+      x += w + gap;
+    }
+  }
+  function wordmark(ctx, y) {
+    const x0 = W / 2 - 150;
+    mark(ctx, x0, y - 54, 76);
+    txt(ctx, 'SUMMIT', x0 + 98, y, { size: 44, weight: 800, align: 'left', spacing: 12 });
+  }
+  function dateLine() {
+    const t = new Date();
+    return `${MONTHS_S[t.getMonth()].toUpperCase()} ${t.getDate()}, ${t.getFullYear()}`;
+  }
+
+  function drawCard() {
+    const c = $('shareCanvas');
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    if (shareStyle === 'card') {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#070707'); g.addColorStop(0.55, '#110b06'); g.addColorStop(1, '#8a4613');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      const r = ctx.createRadialGradient(W * 0.2, -80, 40, W * 0.2, -80, 950);
+      r.addColorStop(0, 'rgba(222,150,52,0.55)'); r.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 28; ctx.shadowOffsetY = 6;
+    const cx = W / 2, wk = weekKeys();
+
+    if (shareTarget === 'all') {
+      wordmark(ctx, 430);
+      const t = new Date();
+      const active = new Set(Object.keys(state.checks).filter((k) => k.startsWith(key(t.getFullYear(), t.getMonth(), 1).slice(0, 7)) && Object.keys(state.checks[k]).length)).size;
+      txt(ctx, String(active), cx, 740, { size: 230, weight: 800, spacing: -8 });
+      txt(ctx, `DAYS ACTIVE IN ${MONTHS[t.getMonth()].toUpperCase()}`, cx, 815, { size: 34, weight: 700, spacing: 8, alpha: 0.75 });
+      const rows = state.habits.slice(0, 6);
+      let y = 960;
+      for (const h of rows) {
+        const s = currentStreak(h.id);
+        txt(ctx, h.name || 'Untitled', 180, y, { size: 54, weight: 700, align: 'left' });
+        txt(ctx, s ? `▲ ${s}` : '—', 900, y, { size: 54, weight: 800, align: 'right', color: s ? '#f3bd6a' : '#fff', alpha: s ? 1 : 0.4 });
+        bar(ctx, 180, y + 30, wk, h.id, 86, 12, 12);
+        y += 160;
+      }
+      if (state.habits.length > 6) txt(ctx, `+${state.habits.length - 6} more`, 180, y, { size: 36, align: 'left', alpha: 0.6 });
+      txt(ctx, dateLine(), cx, y + 50, { size: 30, weight: 600, spacing: 6, alpha: 0.5 });
+    } else {
+      const h = state.habits.find((x) => x.id === shareTarget);
+      if (!h) return;
+      const s = currentStreak(h.id);
+      const t = new Date();
+      wordmark(ctx, 540);
+      txt(ctx, (h.name || 'Untitled').toUpperCase(), cx, 700, { size: 46, weight: 700, spacing: 10, alpha: 0.8 });
+      txt(ctx, String(s), cx, 980, { size: 320, weight: 800, spacing: -12 });
+      txt(ctx, s === 1 ? 'DAY STREAK' : 'DAY STREAK', cx, 1050, { size: 40, weight: 700, spacing: 10, alpha: 0.8 });
+      bar(ctx, cx - (7 * 96 + 6 * 14) / 2, 1120, wk, h.id, 96, 14, 14);
+      const cols = [
+        ['THIS WEEK', `${wk.filter((k) => isDone(h.id, k)).length}/7`],
+        ['THIS MONTH', String(monthCount(h.id, t.getFullYear(), t.getMonth()))],
+        ['BEST', String(bestStreak(h.id))],
+      ];
+      cols.forEach(([label, val], i) => {
+        const x = cx + (i - 1) * 300;
+        txt(ctx, label, x, 1250, { size: 28, weight: 700, spacing: 6, alpha: 0.6 });
+        txt(ctx, val, x, 1335, { size: 78, weight: 800 });
+      });
+      txt(ctx, dateLine(), cx, 1440, { size: 30, weight: 600, spacing: 6, alpha: 0.5 });
+    }
+
+    shareFile = null; shareBlob = null;
+    $('shareBtn').disabled = true;
+    c.toBlob((b) => {
+      shareBlob = b;
+      shareFile = new File([b], `summit-${todayKey()}.png`, { type: 'image/png' });
+      $('shareBtn').disabled = false;
+    }, 'image/png');
+  }
+
+  function openShare(target) {
+    shareTarget = target;
+    const h = state.habits.find((x) => x.id === target);
+    $('shareTitle').textContent = target === 'all' ? MONTHS[new Date().getMonth()] : (h && h.name) || 'Summit';
+    setStyle(shareStyle);
+    showSheet('share');
+  }
+  function setStyle(s) {
+    shareStyle = s;
+    $('styleSticker').classList.toggle('on', s === 'sticker');
+    $('styleCard').classList.toggle('on', s === 'card');
+    $('shareHint').textContent = s === 'sticker'
+      ? 'Clear background. Save it, then in Instagram drop it on your photo as a sticker.'
+      : 'Full story card. Share it straight to Instagram or save it.';
+    drawCard();
+  }
+  $('styleSticker').onclick = () => setStyle('sticker');
+  $('styleCard').onclick = () => setStyle('card');
+  $('shareHabit').onclick = () => { commitName(); const id = editing; editing = null; hideSheets(); render(); openShare(id); };
+  $('shareAll').onclick = () => { closeMenu(); openShare('all'); };
+  $('closeShare').onclick = () => hideSheets();
+  $('shareBtn').onclick = () => {
+    if (!shareFile) return;
+    if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+      navigator.share({ files: [shareFile], title: 'Summit' }).catch(() => {});
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(shareBlob);
+    a.download = shareFile.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 
   $('exportBtn').onclick = () => {

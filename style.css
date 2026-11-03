@@ -295,3 +295,28 @@ td.today .cell[aria-pressed="false"] .dot { border-color: rgba(243,189,106,0.5);
 .check-row:active { background: rgba(255,255,255,0.1); }
 
 [hidden] { display: none !important; }
+
+/* Share sheet */
+.ghost.amber { color: var(--amber-2); border-color: rgba(227,154,58,0.45); }
+.toggle {
+  display: flex; gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  margin-bottom: 14px;
+}
+.toggle button { flex: 1; padding: 10px 0; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.toggle button.on { background: #fff; color: #000; }
+.story-preview {
+  display: grid; place-items: center;
+  padding: 14px;
+  border-radius: 18px;
+  background:
+    radial-gradient(60% 40% at 30% 20%, rgba(222,150,52,0.35), transparent 70%),
+    linear-gradient(170deg, #2b2119 0%, #0d0d0d 55%, #1a120b 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+#shareCanvas { height: min(44dvh, 420px); width: auto; aspect-ratio: 9 / 16; border-radius: 14px; display: block; }
+.muted.small { font-size: 13px; margin: 12px 0 6px; }
+.primary:disabled { opacity: 0.5; }
+.sheet-actions > .ghost.icon { flex: 0 0 60px; font-size: 20px; padding: 12px 0; }

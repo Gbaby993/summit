@@ -68,12 +68,29 @@
     <div><strong id="statTotal">0</strong><span>all time</span></div>
   </div>
   <div class="sheet-actions">
-    <button class="ghost" id="moveUp">&uarr; Move up</button>
-    <button class="ghost" id="moveDown">&darr; Move down</button>
+    <button class="ghost icon" id="moveUp" aria-label="Move up">&uarr;</button>
+    <button class="ghost icon" id="moveDown" aria-label="Move down">&darr;</button>
+    <button class="ghost amber" id="shareHabit">Share to story</button>
   </div>
   <div class="sheet-actions">
     <button class="danger" id="deleteHabit">Delete</button>
     <button class="primary" id="doneHabit">Done</button>
+  </div>
+</section>
+
+<!-- Share to story -->
+<section class="sheet" id="share" hidden aria-modal="true" role="dialog">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title"><span class="eyebrow">Share to your story</span><h2 id="shareTitle">Summit</h2></div>
+  <div class="toggle" role="tablist">
+    <button id="styleSticker" class="on" role="tab">Sticker</button>
+    <button id="styleCard" role="tab">Card</button>
+  </div>
+  <div class="story-preview"><canvas id="shareCanvas" width="1080" height="1920" aria-label="Story preview"></canvas></div>
+  <p class="muted small" id="shareHint">Clear background. Save it, then in Instagram drop it on your photo as a sticker.</p>
+  <div class="sheet-actions">
+    <button class="ghost" id="closeShare">Back</button>
+    <button class="primary" id="shareBtn" disabled>Share</button>
   </div>
 </section>
 
@@ -85,6 +102,9 @@
     <span>Your name</span>
     <input id="userName" type="text" maxlength="20" autocomplete="given-name" autocapitalize="words" enterkeyhint="done" placeholder="First name">
   </label>
+  <div class="sheet-actions">
+    <button class="ghost amber" id="shareAll">Share this month</button>
+  </div>
   <p class="muted">Your log lives on this device only. Export now and then to keep a copy.</p>
   <div class="sheet-actions">
     <button class="ghost" id="exportBtn">Export</button>
