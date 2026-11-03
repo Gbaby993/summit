@@ -790,12 +790,14 @@
   async function takeImportLink() {
     const m = /^#import=([A-Za-z0-9_-]+)$/.exec(location.hash || '');
     if (!m) return false;
-    history.replaceState(null, '', location.pathname + location.search);
+    const dropHash = () => history.replaceState(null, '', location.pathname + location.search);
     let s;
-    try { s = JSON.parse(await decodeImport(m[1])); } catch (_) { alert('That link could not be read on this device.'); return false; }
-    if (!Array.isArray(s.habits) || typeof s.checks !== 'object') return false;
+    try { s = JSON.parse(await decodeImport(m[1])); } catch (_) { dropHash(); alert('That link could not be read on this device.'); return false; }
+    if (!Array.isArray(s.habits) || typeof s.checks !== 'object') { dropHash(); return false; }
     const names = s.habits.map((h) => h.name).filter(Boolean).join(', ') || 'no lines';
-    if (!confirm('Replace the log on this device with the one from the link? (' + names + ')')) return false;
+    const ok = confirm('Replace the log on this device with the one from the link? (' + names + ')');
+    dropHash();
+    if (!ok) return false;
     state = fill(s); save();
     render(); scrollToToday(false);
     return true;
