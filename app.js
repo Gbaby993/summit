@@ -577,7 +577,7 @@
   $('addHabit').onclick = addHabit;
 
   // ---- sheets (generic) ----
-  const SHEETS = ['sheet', 'menu', 'checkin', 'share', 'post', 'more', 'friends', 'support'];
+  const SHEETS = ['sheet', 'menu', 'checkin', 'share', 'post', 'more', 'friends', 'support', 'move'];
   function showSheet(id) { $('scrim').hidden = false; $(id).hidden = false; }
   function hideSheets() { $('scrim').hidden = true; for (const id of SHEETS) $(id).hidden = true; }
 
@@ -730,6 +730,76 @@
   }
   $('copyInvite').onclick = copyInvite;
   $('closeFriends').onclick = hideSheets;
+
+  // ---- move this log to another device (link carries the log in the URL fragment; never sent to a server) ----
+  const bytesToB64url = (bytes) => { let b = ''; for (const x of bytes) b += String.fromCharCode(x); return btoa(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const b64urlToBytes = (str) => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+  async function pipeBytes(bytes, stream) {
+    const r = new Blob([bytes]).stream().pipeThrough(stream);
+    return new Uint8Array(await new Response(r).arrayBuffer());
+  }
+  // "z" prefix = deflated; plain base64url otherwise (older devices)
+  async function moveLink() {
+    const raw = new TextEncoder().encode(JSON.stringify(state));
+    if (typeof CompressionStream === 'function') {
+      try { return INVITE_URL + '#import=z' + bytesToB64url(await pipeBytes(raw, new CompressionStream('deflate-raw'))); } catch (_) {}
+    }
+    return INVITE_URL + '#import=' + bytesToB64url(raw);
+  }
+  async function decodeImport(token) {
+    if (token[0] === 'z') {
+      if (typeof DecompressionStream !== 'function') throw new Error('old');
+      return new TextDecoder().decode(await pipeBytes(b64urlToBytes(token.slice(1)), new DecompressionStream('deflate-raw')));
+    }
+    return new TextDecoder().decode(b64urlToBytes(token));
+  }
+  let qrLib = null;
+  function loadQr() {
+    if (window.qrcode) return Promise.resolve(window.qrcode);
+    if (qrLib) return qrLib;
+    qrLib = new Promise((res, rej) => {
+      const el = document.createElement('script');
+      el.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+      el.onload = () => res(window.qrcode);
+      el.onerror = () => { qrLib = null; rej(new Error('qr')); };
+      document.head.appendChild(el);
+    });
+    return qrLib;
+  }
+  async function openMove() {
+    const box = $('qrBox');
+    box.textContent = 'Making code…';
+    hideSheets(); showSheet('move');
+    const link = await moveLink();
+    if (link.length > 2900) { box.textContent = 'This log is too big for a code. Copy the link instead and send it to the other device.'; return; }
+    try {
+      const qrcode = await loadQr();
+      const qr = qrcode(0, 'L');
+      qr.addData(link);
+      qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    } catch (_) { box.textContent = 'Could not load the code maker. Copy the link instead.'; }
+  }
+  $('moveBtn').onclick = openMove;
+  $('closeMove').onclick = hideSheets;
+  $('copyMove').onclick = async () => {
+    try { await navigator.clipboard.writeText(await moveLink()); $('copyMove').textContent = 'Copied'; }
+    catch (_) { $('copyMove').textContent = 'Copy failed'; }
+    setTimeout(() => { $('copyMove').textContent = 'Copy link'; }, 1800);
+  };
+  async function takeImportLink() {
+    const m = /^#import=([A-Za-z0-9_-]+)$/.exec(location.hash || '');
+    if (!m) return false;
+    history.replaceState(null, '', location.pathname + location.search);
+    let s;
+    try { s = JSON.parse(await decodeImport(m[1])); } catch (_) { alert('That link could not be read on this device.'); return false; }
+    if (!Array.isArray(s.habits) || typeof s.checks !== 'object') return false;
+    const names = s.habits.map((h) => h.name).filter(Boolean).join(', ') || 'no lines';
+    if (!confirm('Replace the log on this device with the one from the link? (' + names + ')')) return false;
+    state = fill(s); save();
+    render(); scrollToToday(false);
+    return true;
+  }
   $('closeMenu').onclick = closeMenu;
   for (const id of ['userName', 'userBio', 'userSports']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); closeMenu(); } });
   $('scrim').onclick = () => {
@@ -1228,7 +1298,7 @@
 
   render();
   scrollToToday(false);
-  restoreIfEmpty();
+  takeImportLink().then((took) => { if (!took) restoreIfEmpty(); });
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     // pull new versions whenever the app is reopened; reload once the new worker takes over

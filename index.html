@@ -210,6 +210,7 @@
     <button class="ghost" id="importBtn">Import</button>
     <input type="file" id="importFile" accept="application/json" hidden>
   </div>
+  <div class="sheet-actions"><button class="ghost block amber" id="moveBtn">Move this log to another device</button></div>
   <div class="sheet-actions">
     <button class="primary" id="closeMenu">Done</button>
   </div>
@@ -250,6 +251,18 @@
     <a class="ghost block" id="supportIssue" href="https://github.com/Gbaby993/summit/issues/new" target="_blank" rel="noopener">Report a problem</a>
   </div>
   <div class="sheet-actions"><button class="ghost block" id="closeSupport">Done</button></div>
+</section>
+
+<!-- Move log to another device -->
+<section class="sheet" id="move" hidden aria-modal="true" role="dialog">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title"><span class="eyebrow">Move</span><h2>Scan on the other device</h2></div>
+  <div class="qr" id="qrBox"></div>
+  <p class="muted small" id="moveHint">Point the other phone's camera at the code and open the link. It asks before replacing that device's log with this one.</p>
+  <div class="sheet-actions">
+    <button class="ghost" id="copyMove">Copy link</button>
+    <button class="primary" id="closeMove">Done</button>
+  </div>
 </section>
 
 <script src="app.js"></script>
