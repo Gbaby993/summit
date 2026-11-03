@@ -5,6 +5,8 @@
   const WD = ['S','M','T','W','T','F','S'];
   const WD_L = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const CHECK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>';
+  const MARK = '<svg viewBox="0 0 512 512"><path d="M96 352 L224 176 L288 264 L336 208 L416 352" fill="none" stroke="currentColor" stroke-width="34" stroke-linejoin="round" stroke-linecap="round"/><circle cx="224" cy="176" r="24" fill="#e39a3a"/></svg>';
+  const SHARE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>';
 
   const $ = (id) => document.getElementById(id);
   const uid = () => Math.random().toString(36).slice(2, 10);
@@ -15,17 +17,19 @@
   const todayKey = () => keyOf(new Date());
   const shift = (k, days) => { const d = dateFromKey(k); d.setDate(d.getDate() + days); return keyOf(d); };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const norm = (s) => String(s || '').trim().toLowerCase();
 
   // ---- state ----
   let state = load();
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
-      if (s && Array.isArray(s.habits) && s.checks) { s.name ||= ''; return s; }
+      if (s && Array.isArray(s.habits) && s.checks) { s.name ||= ''; s.bio ||= ''; s.posts ||= []; return s; }
     } catch (_) {}
-    return { name: '', habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {} };
+    return { name: '', bio: '', habits: [{ id: uid(), name: 'Gym' }, { id: uid(), name: 'Sober' }], checks: {}, posts: [] };
   }
   function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+  const habitById = (id) => state.habits.find((x) => x.id === id);
 
   const isDone = (hid, k) => !!(state.checks[k] && state.checks[k][hid]);
   function setDone(hid, k, on) {
@@ -34,14 +38,61 @@
     save();
   }
 
+  // ---- photo store (IndexedDB; localStorage is too small for images) ----
+  const photos = {
+    open() {
+      return new Promise((res, rej) => {
+        const r = indexedDB.open('summit', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('photos');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+    },
+    async tx(mode, fn) {
+      const d = await this.open();
+      return new Promise((res, rej) => {
+        const t = d.transaction('photos', mode);
+        const req = fn(t.objectStore('photos'));
+        t.oncomplete = () => res(req && req.result);
+        t.onerror = () => rej(t.error);
+      });
+    },
+    put(k, v) { return this.tx('readwrite', (s) => s.put(v, k)); },
+    get(k) { return this.tx('readonly', (s) => s.get(k)); },
+    del(k) { return this.tx('readwrite', (s) => s.delete(k)); },
+  };
+  const urlCache = new Map();
+  async function photoUrl(id) {
+    if (urlCache.has(id)) return urlCache.get(id);
+    const blob = await photos.get(id).catch(() => null);
+    const url = blob ? URL.createObjectURL(blob) : null;
+    urlCache.set(id, url);
+    return url;
+  }
+  function loadImage(src) {
+    return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  }
+  async function compressPhoto(file, max = 1440) {
+    const src = URL.createObjectURL(file);
+    try {
+      const img = await loadImage(src);
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.86));
+    } finally { URL.revokeObjectURL(src); }
+  }
+
   // ---- stats ----
-  function currentStreak(hid) {
-    let k = todayKey();
-    if (!isDone(hid, k)) k = shift(k, -1);          // today still open; count from yesterday
+  function streakAt(hid, endKey) {
+    let k = endKey;
+    if (!isDone(hid, k)) k = shift(k, -1);
     let n = 0;
     while (isDone(hid, k)) { n++; k = shift(k, -1); }
     return n;
   }
+  const currentStreak = (hid) => streakAt(hid, todayKey());
   function bestStreak(hid) {
     const days = Object.keys(state.checks).filter((k) => state.checks[k][hid]).sort();
     let best = 0, run = 0, prev = null;
@@ -59,8 +110,11 @@
     return n;
   }
   const totalCount = (hid) => Object.keys(state.checks).filter((k) => state.checks[k][hid]).length;
-
-  // Monday-start week containing today
+  const activeDays = () => Object.keys(state.checks).filter((k) => Object.keys(state.checks[k]).length).length;
+  function activeDaysSince(days) {
+    const from = shift(todayKey(), -days);
+    return Object.keys(state.checks).filter((k) => k >= from && Object.keys(state.checks[k]).length).length;
+  }
   function weekKeys() {
     const t = new Date();
     const dow = (t.getDay() + 6) % 7; // Mon = 0
@@ -68,13 +122,32 @@
     return Array.from({ length: 7 }, (_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); return keyOf(d); });
   }
 
-  // ---- view ----
+  // ---- navigation ----
+  let screen = 'home';
+  function go(name) {
+    if (name === 'new') { openPost(); return; }
+    screen = name;
+    document.body.dataset.screen = name;
+    for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === 'screen-' + name);
+    for (const b of document.querySelectorAll('.tabbar [data-tab]')) b.classList.toggle('on', b.dataset.tab === name);
+    if (name === 'feed') renderFeed();
+    if (name === 'profile') renderProfile();
+    window.scrollTo({ top: 0 });
+  }
+  document.querySelector('.tabbar').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]');
+    if (b) go(b.dataset.tab);
+  });
+
+  // ---- home ----
   const now = new Date();
   let view = { y: now.getFullYear(), m: now.getMonth() };
 
   function renderTop() {
     const n = (state.name || '').trim();
-    $('avatarBtn').textContent = n ? n[0].toUpperCase() : 'S';
+    const initial = n ? n[0].toUpperCase() : 'S';
+    $('avatarBtn').textContent = initial;
+    $('profileAvatar').textContent = initial;
     const streaks = state.habits.map((h) => currentStreak(h.id));
     const top = Math.max(0, ...streaks);
     const who = n ? `, ${esc(n)}` : '';
@@ -143,7 +216,11 @@
     $('grid').innerHTML = head + body;
   }
 
-  function render() { renderTop(); renderCards(); renderGrid(); }
+  function render() {
+    renderTop(); renderCards(); renderGrid();
+    if (screen === 'feed') renderFeed();
+    if (screen === 'profile') renderProfile();
+  }
 
   function refreshRow(hid) {
     const row = document.querySelector(`tr[data-row="${hid}"]`);
@@ -164,7 +241,6 @@
     wrap.scrollTo({ left: Math.max(0, target), behavior: smooth ? 'smooth' : 'auto' });
   }
 
-  // ---- grid interactions ----
   $('gridWrap').addEventListener('click', (e) => {
     const cell = e.target.closest('.cell');
     if (cell) {
@@ -206,17 +282,18 @@
   $('addHabit').onclick = addHabit;
 
   // ---- sheets (generic) ----
+  const SHEETS = ['sheet', 'menu', 'checkin', 'share', 'post'];
   function showSheet(id) { $('scrim').hidden = false; $(id).hidden = false; }
-  function hideSheets() { $('scrim').hidden = true; for (const id of ['sheet', 'menu', 'checkin', 'share']) $(id).hidden = true; }
+  function hideSheets() { $('scrim').hidden = true; for (const id of SHEETS) $(id).hidden = true; }
 
   // ---- habit sheet ----
   let editing = null;
   function openSheet(hid, isNew) {
     editing = hid;
-    const h = state.habits.find((x) => x.id === hid);
+    const h = habitById(hid);
     if (!h) return;
     $('habitName').value = h.name;
-    $('habitName').placeholder = isNew ? 'e.g. Run, Read, No sugar' : '';
+    $('habitName').placeholder = isNew ? 'e.g. Run, Lift, Hoop, Swim' : '';
     $('statStreak').textContent = currentStreak(hid);
     $('statBest').textContent = bestStreak(hid);
     $('statMonth').textContent = monthCount(hid, view.y, view.m);
@@ -228,7 +305,7 @@
     setTimeout(() => { $('habitName').focus(); if (!isNew) $('habitName').select(); }, 30);
   }
   function commitName() {
-    const h = state.habits.find((x) => x.id === editing);
+    const h = habitById(editing);
     if (!h) return;
     const name = $('habitName').value.trim();
     if (!name) { if (!h.name) state.habits = state.habits.filter((x) => x.id !== editing); }
@@ -239,12 +316,13 @@
   $('doneHabit').onclick = closeSheet;
   $('habitName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); closeSheet(); } });
   $('deleteHabit').onclick = () => {
-    const h = state.habits.find((x) => x.id === editing);
+    const h = habitById(editing);
     if (!h) return;
     const n = totalCount(h.id);
     if (h.name && n && !confirm(`Delete "${h.name}" and its ${n} marks?`)) return;
     state.habits = state.habits.filter((x) => x.id !== editing);
     for (const k of Object.keys(state.checks)) { delete state.checks[k][h.id]; if (!Object.keys(state.checks[k]).length) delete state.checks[k]; }
+    for (const p of state.posts) p.habits = p.habits.filter((id) => id !== h.id);
     save();
     editing = null;
     hideSheets();
@@ -290,16 +368,248 @@
   $('checkinBtn').onclick = openCheckin;
   $('closeCheckin').onclick = () => { hideSheets(); render(); scrollToToday(false); };
 
-  // ---- profile / settings ----
-  $('avatarBtn').onclick = () => { $('userName').value = state.name || ''; showSheet('menu'); };
-  function closeMenu() { state.name = $('userName').value.trim(); save(); hideSheets(); renderTop(); }
+  // ---- profile edit / settings ----
+  function openMenu() { $('userName').value = state.name || ''; $('userBio').value = state.bio || ''; showSheet('menu'); }
+  function closeMenu() {
+    state.name = $('userName').value.trim();
+    state.bio = $('userBio').value.trim();
+    save(); hideSheets(); renderTop();
+    if (screen === 'profile') renderProfile();
+  }
+  $('avatarBtn').onclick = () => go('profile');
+  $('editProfile').onclick = openMenu;
+  $('profileMenu').onclick = openMenu;
   $('closeMenu').onclick = closeMenu;
-  $('userName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); closeMenu(); } });
+  for (const id of ['userName', 'userBio']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); closeMenu(); } });
   $('scrim').onclick = () => {
     if (!$('sheet').hidden) closeSheet();
     else if (!$('menu').hidden) closeMenu();
+    else if (!$('post').hidden) closePost();
     else { hideSheets(); render(); }
   };
+
+  $('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `summit-${todayKey()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('importBtn').onclick = () => $('importFile').click();
+  $('importFile').onchange = async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const s = JSON.parse(await f.text());
+      if (!Array.isArray(s.habits) || typeof s.checks !== 'object') throw new Error('bad');
+      if (!confirm('Replace everything on this device with the imported log?')) return;
+      s.name ||= ''; s.bio ||= ''; s.posts ||= [];
+      state = s; save(); hideSheets(); render(); scrollToToday(false);
+    } catch (_) { alert('That file is not a Summit export.'); }
+    e.target.value = '';
+  };
+
+  // ---- sessions (posts) ----
+  let draft = null; // { blob, url, habits:Set }
+  function openPost() {
+    const t = new Date();
+    draft = { blob: null, url: null, habits: new Set(state.habits.filter((h) => isDone(h.id, todayKey())).map((h) => h.id)) };
+    $('postDate').textContent = `${WD_L[t.getDay()]}, ${MONTHS_S[t.getMonth()]} ${t.getDate()}`;
+    $('postCaption').value = '';
+    $('photoPreview').hidden = true; $('photoPreview').src = '';
+    $('photoHint').hidden = false;
+    renderChips();
+    showSheet('post');
+  }
+  function renderChips() {
+    $('postChips').innerHTML = state.habits.length
+      ? state.habits.map((h) => `<button class="chip${draft.habits.has(h.id) ? ' on' : ''}" data-chip="${h.id}">${esc(h.name) || 'Untitled'}</button>`).join('')
+      : '<span class="muted">Add a line on Home first.</span>';
+  }
+  $('postChips').addEventListener('click', (e) => {
+    const c = e.target.closest('[data-chip]');
+    if (!c) return;
+    const id = c.dataset.chip;
+    if (draft.habits.has(id)) draft.habits.delete(id); else draft.habits.add(id);
+    c.classList.toggle('on', draft.habits.has(id));
+  });
+  $('photoPick').onclick = () => $('photoFile').click();
+  $('photoFile').onchange = async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    $('photoHint').textContent = 'Loading…';
+    try {
+      draft.blob = await compressPhoto(f);
+      if (draft.url) URL.revokeObjectURL(draft.url);
+      draft.url = URL.createObjectURL(draft.blob);
+      $('photoPreview').src = draft.url; $('photoPreview').hidden = false;
+      $('photoHint').hidden = true;
+    } catch (_) { $('photoHint').textContent = 'Could not read that photo'; }
+  };
+  function closePost() { if (draft && draft.url) URL.revokeObjectURL(draft.url); draft = null; hideSheets(); }
+  $('closePost').onclick = closePost;
+  $('savePost').onclick = async () => {
+    if (!draft) return;
+    if (!draft.blob && !draft.habits.size) { alert('Add a photo or pick what you did.'); return; }
+    const id = uid();
+    const tk = todayKey();
+    const habits = [...draft.habits];
+    for (const hid of habits) setDone(hid, tk, true);     // posting a session marks the day
+    const post = { id, ts: Date.now(), day: tk, caption: $('postCaption').value.trim(), habits, photo: null,
+      streaks: Object.fromEntries(habits.map((hid) => [hid, streakAt(hid, tk)])) };
+    if (draft.blob) { try { await photos.put(id, draft.blob); post.photo = id; } catch (_) {} }
+    state.posts.unshift(post);
+    save();
+    closePost();
+    go('feed');
+    render();
+  };
+
+  // ---- feed ranking ----
+  // Scores a session for a viewer the way an athlete-first feed should: what you train,
+  // how hard the streak was, how consistent the author is, and how fresh it is.
+  // No likes, no follower counts. Works on your own sessions now and on everyone's later.
+  function rankScore(post, viewer) {
+    const hours = (Date.now() - post.ts) / 36e5;
+    const recency = Math.pow(0.5, hours / 36);                       // half-life 36h
+    const viewerSports = new Set(viewer.habits.map((h) => norm(h.name)));
+    const postSports = post.habits.map((id) => norm((habitById(id) || {}).name));
+    const affinity = postSports.length ? postSports.filter((s) => viewerSports.has(s)).length / postSports.length : 0;
+    const topStreak = Math.max(0, ...Object.values(post.streaks || {}));
+    const effort = Math.log1p(topStreak) / Math.log1p(30);          // 30-day streak ≈ 1.0
+    const consistency = Math.min(1, activeDaysSince(30) / 20);       // author: 20 of last 30 days ≈ 1.0
+    const media = post.photo ? 0.15 : 0;
+    const score = recency * (1 + 0.6 * affinity + 0.5 * effort + 0.3 * consistency + media);
+    const why = topStreak >= 7 ? `${topStreak}-day streak` : affinity ? 'What you train' : consistency >= 0.75 ? 'Consistent' : 'New';
+    return { score, why };
+  }
+  function rankFeed(posts, viewer) {
+    return posts.map((p) => ({ p, ...rankScore(p, viewer) })).sort((a, b) => b.score - a.score);
+  }
+
+  let feedMode = 'foryou';
+  function timeAgo(ts) {
+    const m = Math.round((Date.now() - ts) / 6e4);
+    if (m < 1) return 'now'; if (m < 60) return `${m}m`;
+    const h = Math.round(m / 60); if (h < 24) return `${h}h`;
+    const d = Math.round(h / 24); if (d < 7) return `${d}d`;
+    const dt = new Date(ts); return `${MONTHS_S[dt.getMonth()]} ${dt.getDate()}`;
+  }
+  async function renderFeed() {
+    const el = $('feedList');
+    const name = (state.name || '').trim() || 'You';
+    const initial = name[0].toUpperCase();
+    if (!state.posts.length) {
+      el.innerHTML = `<div class="empty-state">No sessions yet.<br>Post one and it shows up here with your stats stamped on it.<br><button class="primary" id="emptyNew">New session</button></div>`;
+      $('emptyNew').onclick = openPost;
+      return;
+    }
+    const ranked = feedMode === 'foryou' ? rankFeed(state.posts, state) : state.posts.map((p) => ({ p, why: '' }));
+    let html = `<div class="feed-toggle"><button data-mode="foryou" class="${feedMode === 'foryou' ? 'on' : ''}">For you</button><button data-mode="latest" class="${feedMode === 'latest' ? 'on' : ''}">Latest</button></div>`;
+    for (const { p, why } of ranked) {
+      const lines = p.habits.map((id) => habitById(id)).filter(Boolean);
+      const top = Math.max(0, ...Object.values(p.streaks || {}));
+      const stamp = lines.length ? `<div class="stamp"><span class="sm">${MARK} Summit</span>${lines.map((h) => `<span class="row">${esc(h.name)}<em>&#9650; ${p.streaks[h.id] || 0}</em></span>`).join('')}</div>` : '';
+      const media = p.photo
+        ? `<div class="post-media"><img data-photo="${p.photo}" alt="">${stamp}</div>`
+        : `<div class="post-media nophoto"><div class="bigstat"><b>${top}</b><span>day streak</span></div>${stamp}</div>`;
+      html += `<article class="post" id="post-${p.id}">
+        <div class="post-head"><span class="avatar">${initial}</span><div class="who"><b>${esc(name)}</b><small>${lines.map((h) => esc(h.name)).join(' · ') || 'Session'}</small></div><time>${timeAgo(p.ts)}</time><button class="more" data-more="${p.id}" aria-label="More">&middot;&middot;&middot;</button></div>
+        ${media}
+        <div class="post-actions"><button data-sharepost="${p.id}">${SHARE_ICON} Share to story</button><span class="spacer"></span>${why ? `<span class="why">${esc(why)}</span>` : ''}</div>
+        ${p.caption ? `<p class="caption"><b>${esc(name)}</b>${esc(p.caption)}</p>` : ''}
+      </article>`;
+    }
+    el.innerHTML = html;
+    for (const img of el.querySelectorAll('img[data-photo]')) photoUrl(img.dataset.photo).then((u) => { if (u) img.src = u; });
+  }
+  $('feedList').addEventListener('click', async (e) => {
+    const mode = e.target.closest('[data-mode]');
+    if (mode) { feedMode = mode.dataset.mode; renderFeed(); return; }
+    const more = e.target.closest('[data-more]');
+    if (more) {
+      if (!confirm('Delete this session? Your day marks stay.')) return;
+      const p = state.posts.find((x) => x.id === more.dataset.more);
+      if (p && p.photo) photos.del(p.photo).catch(() => {});
+      state.posts = state.posts.filter((x) => x.id !== more.dataset.more);
+      save(); renderFeed();
+      return;
+    }
+    const sp = e.target.closest('[data-sharepost]');
+    if (sp) sharePost(sp.dataset.sharepost);
+  });
+  $('feedNew').onclick = openPost;
+
+  // Stamp the stats onto the photo (or a card if there is none) and hand it to the share sheet.
+  async function sharePost(id) {
+    const p = state.posts.find((x) => x.id === id);
+    if (!p) return;
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    if (p.photo) {
+      const url = await photoUrl(p.photo);
+      const img = await loadImage(url);
+      c.width = img.width; c.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    } else {
+      c.width = 1080; c.height = 1350;
+      const g = ctx.createLinearGradient(0, 0, 0, c.height);
+      g.addColorStop(0, '#121212'); g.addColorStop(1, '#2a1708');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, c.width, c.height);
+    }
+    const u = c.width / 1080; // scale units to the image
+    const lines = p.habits.map((hid) => habitById(hid)).filter(Boolean);
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 24 * u; ctx.shadowOffsetY = 4 * u;
+    const pad = 56 * u, rowH = 64 * u;
+    const boxW = 420 * u, boxH = (60 + lines.length * 64 + 24) * u;
+    const x = pad, y = c.height - pad - boxH;
+    ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.42)'; ctx.beginPath(); ctx.roundRect(x, y, boxW, boxH, 24 * u); ctx.fill(); ctx.restore();
+    mark(ctx, x + 26 * u, y + 18 * u, 40 * u);
+    txt(ctx, 'SUMMIT', x + 76 * u, y + 50 * u, { size: 24 * u, weight: 800, align: 'left', spacing: 6 * u, alpha: 0.85 });
+    lines.forEach((h, i) => {
+      const ly = y + (108 + i * 64) * u;
+      txt(ctx, h.name, x + 26 * u, ly, { size: 36 * u, weight: 700, align: 'left' });
+      txt(ctx, `▲ ${p.streaks[h.id] || 0}`, x + boxW - 26 * u, ly, { size: 32 * u, weight: 800, align: 'right', color: '#f3bd6a' });
+    });
+    if (!lines.length) txt(ctx, 'Session', x + 26 * u, y + 108 * u, { size: 36 * u, weight: 700, align: 'left' });
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
+    const file = new File([blob], `summit-${p.day}.jpg`, { type: 'image/jpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: 'Summit' }).catch(() => {}); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // ---- profile ----
+  function renderProfile() {
+    const name = (state.name || '').trim();
+    $('profileHandle').textContent = name || 'Summit';
+    $('profileBio').textContent = state.bio || '';
+    $('cSessions').textContent = state.posts.length;
+    $('cDays').textContent = activeDays();
+    $('cBest').textContent = Math.max(0, ...state.habits.map((h) => bestStreak(h.id)));
+    $('highlights').innerHTML = state.habits.map((h) => {
+      const s = currentStreak(h.id);
+      return `<button class="hl" data-hl="${h.id}"><span class="ring${s >= 3 ? ' hot' : ''}">${s}</span><span>${esc(h.name) || 'Untitled'}</span></button>`;
+    }).join('');
+    const g = $('pgrid');
+    if (!state.posts.length) { g.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Your sessions will show up here.</div>'; return; }
+    g.innerHTML = state.posts.map((p) => {
+      const top = Math.max(0, ...Object.values(p.streaks || {}));
+      return `<button data-open="${p.id}">${p.photo ? `<img data-photo="${p.photo}" alt="">` : `<div class="tile-stat">${top}<small>streak</small></div>`}</button>`;
+    }).join('');
+    for (const img of g.querySelectorAll('img[data-photo]')) photoUrl(img.dataset.photo).then((u) => { if (u) img.src = u; });
+  }
+  $('highlights').addEventListener('click', (e) => { const b = e.target.closest('[data-hl]'); if (b) openSheet(b.dataset.hl); });
+  $('pgrid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-open]');
+    if (!b) return;
+    feedMode = 'latest';
+    go('feed');
+    setTimeout(() => { const el = $('post-' + b.dataset.open); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 50);
+  });
+  $('profileShare').onclick = () => openShare('all');
 
   // ---- share to story (1080x1920 PNG) ----
   const F = 'system-ui, -apple-system, "Helvetica Neue", "Segoe UI", Arial, sans-serif';
@@ -363,7 +673,8 @@
     if (shareTarget === 'all') {
       wordmark(ctx, 430);
       const t = new Date();
-      const active = new Set(Object.keys(state.checks).filter((k) => k.startsWith(key(t.getFullYear(), t.getMonth(), 1).slice(0, 7)) && Object.keys(state.checks[k]).length)).size;
+      const prefix = key(t.getFullYear(), t.getMonth(), 1).slice(0, 7);
+      const active = Object.keys(state.checks).filter((k) => k.startsWith(prefix) && Object.keys(state.checks[k]).length).length;
       txt(ctx, String(active), cx, 740, { size: 230, weight: 800, spacing: -8 });
       txt(ctx, `DAYS ACTIVE IN ${MONTHS[t.getMonth()].toUpperCase()}`, cx, 815, { size: 34, weight: 700, spacing: 8, alpha: 0.75 });
       const rows = state.habits.slice(0, 6);
@@ -375,17 +686,17 @@
         bar(ctx, 180, y + 30, wk, h.id, 86, 12, 12);
         y += 160;
       }
-      if (state.habits.length > 6) txt(ctx, `+${state.habits.length - 6} more`, 180, y, { size: 36, align: 'left', alpha: 0.6 });
+      if (state.habits.length > 6) { txt(ctx, `+${state.habits.length - 6} more`, 180, y, { size: 36, align: 'left', alpha: 0.6 }); y += 60; }
       txt(ctx, dateLine(), cx, y + 50, { size: 30, weight: 600, spacing: 6, alpha: 0.5 });
     } else {
-      const h = state.habits.find((x) => x.id === shareTarget);
+      const h = habitById(shareTarget);
       if (!h) return;
       const s = currentStreak(h.id);
       const t = new Date();
       wordmark(ctx, 540);
       txt(ctx, (h.name || 'Untitled').toUpperCase(), cx, 700, { size: 46, weight: 700, spacing: 10, alpha: 0.8 });
       txt(ctx, String(s), cx, 980, { size: 320, weight: 800, spacing: -12 });
-      txt(ctx, s === 1 ? 'DAY STREAK' : 'DAY STREAK', cx, 1050, { size: 40, weight: 700, spacing: 10, alpha: 0.8 });
+      txt(ctx, 'DAY STREAK', cx, 1050, { size: 40, weight: 700, spacing: 10, alpha: 0.8 });
       bar(ctx, cx - (7 * 96 + 6 * 14) / 2, 1120, wk, h.id, 96, 14, 14);
       const cols = [
         ['THIS WEEK', `${wk.filter((k) => isDone(h.id, k)).length}/7`],
@@ -411,7 +722,7 @@
 
   function openShare(target) {
     shareTarget = target;
-    const h = state.habits.find((x) => x.id === target);
+    const h = habitById(target);
     $('shareTitle').textContent = target === 'all' ? MONTHS[new Date().getMonth()] : (h && h.name) || 'Summit';
     setStyle(shareStyle);
     showSheet('share');
@@ -428,7 +739,6 @@
   $('styleSticker').onclick = () => setStyle('sticker');
   $('styleCard').onclick = () => setStyle('card');
   $('shareHabit').onclick = () => { commitName(); const id = editing; editing = null; hideSheets(); render(); openShare(id); };
-  $('shareAll').onclick = () => { closeMenu(); openShare('all'); };
   $('closeShare').onclick = () => hideSheets();
   $('shareBtn').onclick = () => {
     if (!shareFile) return;
@@ -441,28 +751,6 @@
     a.download = shareFile.name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  };
-
-  $('exportBtn').onclick = () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `summit-${todayKey()}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  };
-  $('importBtn').onclick = () => $('importFile').click();
-  $('importFile').onchange = async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    try {
-      const s = JSON.parse(await f.text());
-      if (!Array.isArray(s.habits) || typeof s.checks !== 'object') throw new Error('bad');
-      if (!confirm('Replace everything on this device with the imported log?')) return;
-      s.name ||= '';
-      state = s; save(); hideSheets(); render(); scrollToToday(false);
-    } catch (_) { alert('That file is not a Summit export.'); }
-    e.target.value = '';
   };
 
   // keep "today" honest if the app is left open past midnight

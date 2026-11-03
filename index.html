@@ -15,34 +15,76 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-screen="home">
 <div class="glow" aria-hidden="true"></div>
 
-<header class="top">
-  <button class="avatar" id="avatarBtn" aria-label="Profile and settings">S</button>
-  <button class="pill ghost" id="todayBtn">Today</button>
-</header>
+<!-- ================= HOME ================= -->
+<main class="screen on" id="screen-home">
+  <header class="top">
+    <button class="avatar" id="avatarBtn" aria-label="Profile">S</button>
+    <button class="pill ghost" id="todayBtn">Today</button>
+  </header>
 
-<section class="cards" id="cards" aria-label="This week"></section>
+  <section class="cards" id="cards" aria-label="This week"></section>
 
-<h1 class="hero" id="hero">Progress is power.<br>Let's lock in.</h1>
+  <h1 class="hero" id="hero">Progress is power.<br>Let's lock in.</h1>
 
-<section class="month">
-  <div class="month-head">
-    <button class="nav" id="prev" aria-label="Previous month">&#8249;</button>
-    <div class="month-title"><span id="monthName">Month</span> <span class="year" id="yearName">Year</span></div>
-    <button class="nav" id="next" aria-label="Next month">&#8250;</button>
+  <section class="month">
+    <div class="month-head">
+      <button class="nav" id="prev" aria-label="Previous month">&#8249;</button>
+      <div class="month-title"><span id="monthName">Month</span> <span class="year" id="yearName">Year</span></div>
+      <button class="nav" id="next" aria-label="Next month">&#8250;</button>
+    </div>
+    <div class="grid-wrap" id="gridWrap">
+      <table class="grid" id="grid" aria-label="Habit grid"></table>
+    </div>
+    <button class="add" id="addHabit">+ Add a line</button>
+  </section>
+</main>
+
+<!-- ================= FEED ================= -->
+<main class="screen" id="screen-feed">
+  <header class="screen-head">
+    <div class="wordmark"><svg viewBox="0 0 512 512" aria-hidden="true"><path d="M96 352 L224 176 L288 264 L336 208 L416 352" fill="none" stroke="currentColor" stroke-width="30" stroke-linejoin="round" stroke-linecap="round"/><circle cx="224" cy="176" r="22" fill="#e39a3a"/></svg><span>Summit</span></div>
+    <button class="icon-btn" id="feedNew" aria-label="New session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+  </header>
+  <div class="feed" id="feedList"></div>
+</main>
+
+<!-- ================= PROFILE ================= -->
+<main class="screen" id="screen-profile">
+  <header class="screen-head">
+    <h2 class="handle" id="profileHandle">Summit</h2>
+    <button class="icon-btn" id="profileMenu" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </header>
+  <section class="profile-head">
+    <div class="avatar big" id="profileAvatar">S</div>
+    <div class="counts">
+      <div><b id="cSessions">0</b><span>sessions</span></div>
+      <div><b id="cDays">0</b><span>days active</span></div>
+      <div><b id="cBest">0</b><span>best streak</span></div>
+    </div>
+  </section>
+  <p class="bio" id="profileBio"></p>
+  <div class="profile-actions">
+    <button class="ghost block" id="editProfile">Edit profile</button>
+    <button class="ghost block" id="profileShare">Share month</button>
   </div>
-  <div class="grid-wrap" id="gridWrap">
-    <table class="grid" id="grid" aria-label="Habit grid"></table>
-  </div>
-  <button class="add" id="addHabit">+ Add a line</button>
-</section>
+  <section class="highlights" id="highlights" aria-label="Lines"></section>
+  <section class="pgrid" id="pgrid"></section>
+</main>
 
 <button class="checkin" id="checkinBtn">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>
   Check in
 </button>
+
+<nav class="tabbar" aria-label="Screens">
+  <button data-tab="home" class="on" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg></button>
+  <button data-tab="feed" aria-label="Feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="16" cy="8" r="1.5"/></svg></button>
+  <button data-tab="new" aria-label="New session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg></button>
+  <button data-tab="profile" aria-label="Profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></button>
+</nav>
 
 <div class="scrim" id="scrim" hidden></div>
 
@@ -94,17 +136,35 @@
   </div>
 </section>
 
+<!-- New session -->
+<section class="sheet" id="post" hidden aria-modal="true" role="dialog">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title"><span class="eyebrow" id="postDate">Today</span><h2>New session</h2></div>
+  <button class="photo-pick" id="photoPick"><img id="photoPreview" alt="" hidden><span id="photoHint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Add a photo</span></button>
+  <input type="file" id="photoFile" accept="image/*" hidden>
+  <div class="field"><span>What was it</span><div class="chips" id="postChips"></div></div>
+  <label class="field">
+    <span>Caption</span>
+    <input id="postCaption" type="text" maxlength="140" autocomplete="off" placeholder="How did it go?">
+  </label>
+  <div class="sheet-actions">
+    <button class="ghost" id="closePost">Cancel</button>
+    <button class="primary" id="savePost">Post</button>
+  </div>
+</section>
+
 <!-- Profile / settings -->
 <section class="sheet" id="menu" hidden aria-modal="true" role="dialog">
   <div class="sheet-handle"></div>
-  <div class="sheet-title"><span class="eyebrow">Profile</span><h2>Summit</h2></div>
+  <div class="sheet-title"><span class="eyebrow">Profile</span><h2>Edit profile</h2></div>
   <label class="field">
     <span>Your name</span>
     <input id="userName" type="text" maxlength="20" autocomplete="given-name" autocapitalize="words" enterkeyhint="done" placeholder="First name">
   </label>
-  <div class="sheet-actions">
-    <button class="ghost amber" id="shareAll">Share this month</button>
-  </div>
+  <label class="field">
+    <span>Bio</span>
+    <input id="userBio" type="text" maxlength="80" autocomplete="off" placeholder="Here for a good time">
+  </label>
   <p class="muted">Your log lives on this device only. Export now and then to keep a copy.</p>
   <div class="sheet-actions">
     <button class="ghost" id="exportBtn">Export</button>
