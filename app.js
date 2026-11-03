@@ -201,7 +201,8 @@
     screen = name;
     document.body.dataset.screen = name;
     for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === 'screen-' + name);
-    for (const b of document.querySelectorAll('.tabbar [data-tab]')) b.classList.toggle('on', b.dataset.tab === name);
+    const tab = name === 'letter' ? 'profile' : name;
+    for (const b of document.querySelectorAll('.tabbar [data-tab]')) b.classList.toggle('on', b.dataset.tab === tab);
     if (name === 'feed') renderFeed();
     if (name === 'profile') renderProfile();
     if (name === 'letter') renderLetter();
@@ -576,7 +577,7 @@
   $('addHabit').onclick = addHabit;
 
   // ---- sheets (generic) ----
-  const SHEETS = ['sheet', 'menu', 'checkin', 'share', 'post'];
+  const SHEETS = ['sheet', 'menu', 'checkin', 'share', 'post', 'more', 'friends', 'support'];
   function showSheet(id) { $('scrim').hidden = false; $(id).hidden = false; }
   function hideSheets() { $('scrim').hidden = true; for (const id of SHEETS) $(id).hidden = true; }
 
@@ -683,7 +684,52 @@
   }
   $('avatarBtn').onclick = () => go('profile');
   $('editProfile').onclick = openMenu;
-  $('profileMenu').onclick = openMenu;
+  $('profileMenu').onclick = () => showSheet('more');
+  $('closeMore').onclick = hideSheets;
+  $('mSettings').onclick = () => { hideSheets(); openMenu(); };
+  $('mLetter').onclick = () => { hideSheets(); go('letter'); };
+  $('mSupport').onclick = () => { hideSheets(); openSupport(); };
+  $('mFriends').onclick = () => { hideSheets(); openFriends(); };
+  $('letterBack').onclick = () => go('profile');
+
+  // ---- contact support ----
+  const SUPPORT_EMAIL = ''; // inbox for support mail; the Email button stays hidden while this is empty
+  function openSupport() {
+    const m = $('supportMail');
+    m.hidden = !SUPPORT_EMAIL;
+    if (SUPPORT_EMAIL) m.href = 'mailto:' + SUPPORT_EMAIL + '?subject=' + encodeURIComponent('Summit support');
+    showSheet('support');
+  }
+  $('closeSupport').onclick = hideSheets;
+
+  // ---- connect with friends ----
+  const INVITE_URL = 'https://gbaby993.github.io/summit/';
+  function renderFriends() {
+    const list = people();
+    $('friendList').innerHTML = list.length
+      ? list.map((p) => `<div class="friend-row"><span class="avatar">${esc((p.name || '?')[0])}</span><div class="who"><b>${esc(p.name)}</b><span>${esc(p.bio || '')}</span></div><button class="ghost follow" data-follow="${p.id}"></button></div>`).join('')
+      : '<p class="muted">Nobody here yet. Share the link above and they will show up once accounts land.</p>';
+    for (const b of $('friendList').querySelectorAll('[data-follow]')) renderFollowBtn(b, b.dataset.follow);
+  }
+  function openFriends() { renderFriends(); showSheet('friends'); }
+  $('friendList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-follow]');
+    if (!b) return;
+    onFollowClick(b.dataset.follow);
+    renderFollowBtn(b, b.dataset.follow);
+  });
+  $('inviteBtn').onclick = async () => {
+    const data = { title: 'Summit', text: 'Track your lines with me on Summit.', url: INVITE_URL };
+    if (navigator.share) { try { await navigator.share(data); } catch (_) {} }
+    else { await copyInvite(); }
+  };
+  async function copyInvite() {
+    try { await navigator.clipboard.writeText(INVITE_URL); $('copyInvite').textContent = 'Copied'; }
+    catch (_) { $('copyInvite').textContent = INVITE_URL; }
+    setTimeout(() => { $('copyInvite').textContent = 'Copy link'; }, 1800);
+  }
+  $('copyInvite').onclick = copyInvite;
+  $('closeFriends').onclick = hideSheets;
   $('closeMenu').onclick = closeMenu;
   for (const id of ['userName', 'userBio', 'userSports']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); closeMenu(); } });
   $('scrim').onclick = () => {

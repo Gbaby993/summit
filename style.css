@@ -639,3 +639,23 @@ body[data-screen="home"] { padding-bottom: calc(160px + env(safe-area-inset-bott
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { padding: 9px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); font-size: 14px; font-weight: 600; color: var(--ink-2); }
 .chip.on { background: var(--amber); border-color: var(--amber); color: var(--amber-ink); }
+
+/* ---- profile menu ---- */
+.menu-list { display: flex; flex-direction: column; margin: 4px 0 12px; }
+.menu-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 15px 4px; text-align: left; font-size: 16px; font-weight: 600; color: var(--ink); border-bottom: 1px solid rgba(255,255,255,0.07); border-radius: 0; }
+.menu-row:last-child { border-bottom: 0; }
+.menu-row svg { width: 22px; height: 22px; color: var(--amber-2); flex: none; }
+.menu-row span { flex: 1; }
+.menu-row i { width: 8px; height: 8px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(-45deg); margin-right: 6px; }
+.menu-row:active { background: rgba(255,255,255,0.06); }
+.screen-head .back { margin-right: 10px; margin-left: -8px; }
+.screen-head .back + div { flex: 1; }
+.sheet-actions a.block { display: block; text-align: center; text-decoration: none; }
+.friend-list { display: flex; flex-direction: column; margin: 6px 0 10px; }
+.friend-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
+.friend-row:last-child { border-bottom: 0; }
+.friend-row .avatar { flex: none; display: grid; place-items: center; }
+.friend-row .who { flex: 1; min-width: 0; }
+.friend-row .who b { display: block; font-size: 15px; }
+.friend-row .who span { display: block; font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend-row .follow { padding: 8px 14px; font-size: 13px; }
