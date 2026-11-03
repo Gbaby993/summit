@@ -188,7 +188,7 @@
     save();
   }
   const following = () => people().filter((p) => isFollowing(p.id));
-  const friends = () => following().filter((p) => p.followsYou);
+  const followers = () => people().filter((p) => p.followsYou);
   const profileOf = (id) => (!id || id === 'me' ? state : people().find((p) => p.id === id) || null);
   const habitIn = (profile, id) => profile && profile.habits.find((x) => x.id === id);
   const habitById = (id) => habitIn(state, id);
@@ -771,7 +771,7 @@
     const name = (state.name || '').trim();
     $('profileHandle').textContent = name || 'Summit';
     $('profileBio').textContent = state.bio || '';
-    $('cFriends').textContent = friends().length;
+    $('cFollowers').textContent = followers().length;
     $('cFollowing').textContent = following().length;
     $('cDays').textContent = activeDays();
     $('cBest').textContent = Math.max(0, ...state.habits.map((h) => bestStreak(h.id)));
